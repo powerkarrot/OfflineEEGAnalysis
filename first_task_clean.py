@@ -81,7 +81,7 @@ for pid in tqdm.tqdm(lstPIds):
 
     for x in range(1, 8):  
         
-        # if(x > 2):
+        # if(x > 1):
         #     break
         
         # Prepare data 
@@ -175,7 +175,8 @@ for pid in tqdm.tqdm(lstPIds):
                 if(method[m]) == 'Multitaper':
                     psds, freqs = psd_multitaper(raw, low_bias=True,
                                 proj=False, picks=picks,
-                                n_jobs=1, adaptive=False, normalization='full')
+                                n_jobs=12, adaptive=True, normalization='length')
+                    psds_multi = psds[0]
                 elif(method[m]) == 'Welch':
                     psds, freqs = psd_welch(raw,
                                 proj=False, picks=picks,
