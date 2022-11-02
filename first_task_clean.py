@@ -60,7 +60,7 @@ def normalize(values, actual_bounds, desired_bounds):
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 3):
+    if (pid != 5):
        continue
     # if (pid > 1):
     #         break
@@ -109,25 +109,13 @@ for pid in tqdm.tqdm(lstPIds):
         # raw.plot(scalings='20e-4')
         # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
         # raw.plot_psd(average=True)
-        
-                
-        ### independent component analysis (ICA)
-        
-        # ica = mne.preprocessing.ICA(n_components=7, random_state=97, max_iter=800)
-        # ica.fit(raw)
-        # ica.exclude = [1, 2]  # details on how we picked these are omitted here
-        # ica.plot_properties(raw, picks=ica.exclude)
-        # orig_raw = raw.copy()
-        # raw.load_data()
-        # ica.apply(raw)     
 
-    
-        # notch filter and reference
-                            
+        raw.filter(.1, 70, None, fir_design='firwin')
+         
         # notch filter 50Hz interference. don't think it's necessary?
         raw.notch_filter(50, n_jobs=-1)
         
-        # set eeg reference?
+        # Set eeg reference
         raw.set_eeg_reference('average', projection=True)
         #raw.set_eeg_reference(ref_channels=['Pz'])
         # raw.plot_psd()
@@ -179,22 +167,25 @@ for pid in tqdm.tqdm(lstPIds):
             for m in range(len(method)):
 
                 if(method[m]) == 'Multitaper':
-                    psds, freqs = psd_multitaper(raw, low_bias=False,
-                                proj=False, picks=picks,
-                                n_jobs=-1, adaptive=False, normalization='length')
+                    
+                    spectrum = raw.compute_psd(method='multitaper')
+                    psds, freqs = spectrum.get_data(return_freqs=True)
+           
                     # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True) 
+                    #psds /= np.sum(psds, axis=-1, keepdims=True) 
                     #convert to DB
                     #psds = 10 * np.log10(psds) * (-1) # erm lul wut
                 elif(method[m]) == 'Welch':
-                    psds, freqs = psd_welch(raw,
-                                proj=False, picks=picks,
-                                n_jobs=2, n_overlap=150, n_fft=300)
+                    
+                    spectrum = raw.compute_psd(method='welch')
+                    psds, freqs = spectrum.get_data(return_freqs=True)
+                    
                     # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True)
+                    #psds /= np.sum(psds, axis=-1, keepdims=True)
                     #convert to DB
                     #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-
+                    # Normalize the PSDs ?
+                psds /= np.sum(psds, axis=-1, keepdims=True)
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
