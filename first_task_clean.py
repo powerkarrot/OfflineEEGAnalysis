@@ -34,9 +34,9 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = False       
+plot_plots = True       
 save_plots = False
-draw_plots = False
+draw_plots = True
 
 # %%
 pws_lst = list()
@@ -138,7 +138,7 @@ for pid in tqdm.tqdm(lstPIds):
             raw_theta.plot_psd(ax = axs0[1],show=False, n_jobs=1)
             
             axs1 = subfigs[1].subplots(2, 1)
-            raw_theta.plot_psd_topo(axes = axs1[0],show=False, n_jobs=1)
+            raw_alpha.plot_psd_topo(axes = axs1[0],show=False, n_jobs=1)
             raw_theta.plot_psd_topo(axes = axs1[1],show=False, n_jobs=1)
             
             fig.set_constrained_layout(True)
