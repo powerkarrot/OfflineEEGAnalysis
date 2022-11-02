@@ -34,9 +34,31 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = False       
+plot_plots = True       
 save_plots = False
-draw_plots = False
+draw_plots = True
+
+# %%
+# bad channels
+# TODO fill for all participants :')
+bads = [[['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [[], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []]
+]
 
 # %%
 pws_lst = list()
@@ -53,15 +75,11 @@ print(lstPIds)
 
 
 # %%
-def normalize(values, actual_bounds, desired_bounds):
-    return [desired_bounds[0] + (x - actual_bounds[0]) * (desired_bounds[1] - desired_bounds[0]) / (actual_bounds[1] - actual_bounds[0]) for x in values]
-
-# %%
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 3):
-       continue
+    if (pid != 5):
+        continue
     # if (pid > 1):
     #         break
     print("pid:", pid)
@@ -82,9 +100,9 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll.fillna(method='ffill', inplace=True)
     dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
     dfAll = dfAll.dropna()
-    
+       
 
-    for x in range(1, 8):  
+    for x in range(1, 2):  
         
         # if(x > 1):
         #     break
@@ -95,43 +113,49 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=300
+        sfreq=250 # i really think its 300 -.-
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
+        # why?
         # Scale the data from the MNE internal unit V to µV
         # ?
         samples = df.T#*1e-6
         
-
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
+        
+        #high pass filter to remove slow drifts, 70 Hz low pass
+        raw.filter(1., 70., None, fir_design='firwin')
+        
+        #remove power line interferance
+        raw.notch_filter(50., n_jobs=-1)
+        
+        # set eeg reference
+        raw.set_eeg_reference('average', projection=True)
+        
+        # Visual inspection of bad channels
+        # TODO
         # raw.plot(scalings='20e-4')
         # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd(average=True)
-        
-                
-        ### independent component analysis (ICA)
-        
-        # ica = mne.preprocessing.ICA(n_components=7, random_state=97, max_iter=800)
-        # ica.fit(raw)
-        # ica.exclude = [1, 2]  # details on how we picked these are omitted here
-        # ica.plot_properties(raw, picks=ica.exclude)
-        # orig_raw = raw.copy()
-        # raw.load_data()
-        # ica.apply(raw)     
-
-    
-        # notch filter and reference
-                            
-        # notch filter 50Hz interference. don't think it's necessary?
-        raw.notch_filter(50, n_jobs=-1)
-        
-        # set eeg reference?
-        raw.set_eeg_reference('average', projection=True)
-        #raw.set_eeg_reference(ref_channels=['Pz'])
         # raw.plot_psd()
+    
+ 
+        # # independent component analysis (ICA)
+        # # TODO
+        #reject = dict(eeg=400e-6)# unit: uV (EEG channels) dont forget the sample conversion to uV
+        ica = mne.preprocessing.ICA(method = "infomax", n_components=7, random_state=97, max_iter='auto')
+        #ica.fit(raw, reject = reject)
+        ica.fit(raw)
+        # ica.plot_sources(raw)
+        # ica.plot_components()
+        ica.exclude = [0, 2, 3, 4] 
+     
+        #ica.plot_properties(raw, picks=ica.exclude)
+        raw.load_data()
+        ica.apply(raw)     
 
+        #raw.set_eeg_reference(ref_channels=['Pz'])
         
         #plot alpha and theta 
         if(plot_plots):
@@ -175,10 +199,10 @@ for pid in tqdm.tqdm(lstPIds):
                     stim=False)
                     
             method = ['Multitaper', 'Welch']
-    
             for m in range(len(method)):
 
                 if(method[m]) == 'Multitaper':
+                    
                     psds, freqs = psd_multitaper(raw, low_bias=False,
                                 proj=False, picks=picks,
                                 n_jobs=-1, adaptive=False, normalization='length')
@@ -191,9 +215,15 @@ for pid in tqdm.tqdm(lstPIds):
                                 proj=False, picks=picks,
                                 n_jobs=2, n_overlap=150, n_fft=300)
                     # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True)
+                    psds /= np.sum(psds, axis=-1, keepdims=True) 
                     #convert to DB
                     #psds = 10 * np.log10(psds) * (-1) # erm lul wut
+
+
+                # # Normalize the PSDs ?
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
+                # #convert to DB
+                # psds = 10 * np.log10(psds) * (-1) # erm lul wut
 
                 #Mean of all channels
                 psds_mean = psds.mean(0)

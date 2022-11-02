@@ -7,7 +7,7 @@ import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import seaborn as sns
-
+from autoreject import get_rejection_threshold
 
 # composite Simpson's rule
 from scipy.integrate import simpson
@@ -34,9 +34,33 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = False       
+plot_plots = True       
 save_plots = False
-draw_plots = False
+draw_plots = True
+
+# %%
+
+# %%
+# bad channels
+# TODO fill for all participants :')
+bads = [[['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [[], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
+        [['F2', 'F3'], [], ['C4'], [], [], [],  []]
+]
 
 # %%
 pws_lst = list()
@@ -53,14 +77,10 @@ print(lstPIds)
 
 
 # %%
-def normalize(values, actual_bounds, desired_bounds):
-    return [desired_bounds[0] + (x - actual_bounds[0]) * (desired_bounds[1] - desired_bounds[0]) / (actual_bounds[1] - actual_bounds[0]) for x in values]
-
-# %%
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 3):
+    if (pid != 5):
        continue
     # if (pid > 1):
     #         break
@@ -84,7 +104,7 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.dropna()
     
 
-    for x in range(1, 8):  
+    for x in range(1, 2):  
         
         # if(x > 1):
         #     break
@@ -95,51 +115,96 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=300
+        sfreq=250
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
+        # why?
         # Scale the data from the MNE internal unit V to µV
         # ?
         samples = df.T#*1e-6
         
-
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
-        # raw.plot(scalings='20e-4')
-        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd(average=True)
         
-                
-        ### independent component analysis (ICA)
+        #high pass filter to remove slow drifts, 70 Hz low pass
+        raw.filter(1., 70, None, fir_design='firwin')
         
-        # ica = mne.preprocessing.ICA(n_components=7, random_state=97, max_iter=800)
-        # ica.fit(raw)
-        # ica.exclude = [1, 2]  # details on how we picked these are omitted here
-        # ica.plot_properties(raw, picks=ica.exclude)
-        # orig_raw = raw.copy()
-        # raw.load_data()
-        # ica.apply(raw)     
-
-    
-        # notch filter and reference
-                            
-        # notch filter 50Hz interference. don't think it's necessary?
+        #remove power line interferance
         raw.notch_filter(50, n_jobs=-1)
         
-        # set eeg reference?
-        raw.set_eeg_reference('average', projection=True)
-        #raw.set_eeg_reference(ref_channels=['Pz'])
-        # raw.plot_psd()
 
         
+        # Visual inspection of bad channels
+        # TODO
+        
+        raw.set_eeg_reference('average', projection=True)
+
+     
+        #raw.set_eeg_reference(ref_channels=['Pz'])
+        
+        #raw.plot(scalings='20e+4')
+        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
+        # raw.plot_psd()
+        
+        # Create equal length epochs of 4 seconds
+        epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)
+    
+  
+        evoked = epochs.average()
+        #evoked.plot_joint(picks='eeg')
+        #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
+        
+            
+        # Autoreject based on rejection threshold
+        # TODO
+        # epochs.interpolate_bads()
+        
+        #reject = dict(eeg=400e-6)# unit: uV (EEG channels) dont forget the sample conversion to uV
+        reject = get_rejection_threshold(epochs)
+        reject['eeg'] = reject['eeg']
+        print("The rejection dictionary is %s " %reject)
+        # Remove bad epochs
+        # TODO
+        #epochs.drop_bad(reject=reject)  
+        epochs.plot_drop_log()
+        raw.plot()
+        epochs.plot()
+        
+
+
+        # independent component analysis (ICA)
+        # TODO
+        ica = mne.preprocessing.ICA(method="fastica", n_components=7, random_state=97, max_iter='auto')
+        ica.fit(epochs, reject=reject)
+        #ica.fit(epochs)
+        ica.plot_sources(epochs)
+        ica.plot_components()
+        #ica.plot_properties(epochs, picks=ica.exclude)
+
+
+        ica.plot_overlay(epochs, exclude=[0, 2, 3, 4], picks='eeg')
+        #ica.plot_overlay(raw, exclude=[2], picks='eeg')
+        #ica.plot_overlay(raw, exclude=[3], picks='eeg')
+        #ica.plot_overlay(raw, exclude=[4], picks='eeg')
+        
+        ica.exclude = [0, 2, 3 , 4] 
+        # orig_raw = raw.copy()s
+        # raw.load_data()
+        epochs.load_data()
+        ica.apply(epochs)   
+        #ica.plot_sources(epochs)
+  
+   
+        # set eeg reference
+        
         #plot alpha and theta 
-        if(plot_plots):
+        if(False):
             # filter out alpha and theta
             # region
-            raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
+            raw_alpha = epochs.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
             # filter out Theta
-            raw_theta = raw.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
+            raw_theta = epochs.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
             
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
@@ -162,11 +227,11 @@ for pid in tqdm.tqdm(lstPIds):
       
         ### Compute the power spectral density (PSD)
         
-        group1 = raw.copy().pick_channels(['F3', 'F4'])
-        group2 = raw.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
-        group3 = raw.copy().pick_channels(['P3', 'Pz', 'P4'])
+        group1 = epochs.copy().pick_channels(['F3', 'F4'])
+        group2 = epochs.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
+        group3 = epochs.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        raw_groups = [group1, group2, group3, raw.copy()]
+        raw_groups = [group1, group2, group3, epochs.copy()]
         
         for grp_nr, raw_group in enumerate(raw_groups):
             raw = raw_group 
@@ -179,7 +244,7 @@ for pid in tqdm.tqdm(lstPIds):
             for m in range(len(method)):
 
                 if(method[m]) == 'Multitaper':
-                    psds, freqs = psd_multitaper(raw, low_bias=False,
+                    psds, freqs = psd_multitaper(epochs, low_bias=False,
                                 proj=False, picks=picks,
                                 n_jobs=-1, adaptive=False, normalization='length')
                     # Normalize the PSDs ?
@@ -187,13 +252,19 @@ for pid in tqdm.tqdm(lstPIds):
                     #convert to DB
                     #psds = 10 * np.log10(psds) * (-1) # erm lul wut
                 elif(method[m]) == 'Welch':
-                    psds, freqs = psd_welch(raw,
+                    psds, freqs = psd_welch(epochs,
                                 proj=False, picks=picks,
                                 n_jobs=2, n_overlap=150, n_fft=300)
                     # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True)
+                    psds /= np.sum(psds, axis=-1, keepdims=True) 
                     #convert to DB
                     #psds = 10 * np.log10(psds) * (-1) # erm lul wut
+
+
+                # # Normalize the PSDs ?
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
+                # #convert to DB
+                # psds = 10 * np.log10(psds) * (-1) # erm lul wut
 
                 #Mean of all channels
                 psds_mean = psds.mean(0)

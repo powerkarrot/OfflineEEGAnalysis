@@ -23,9 +23,9 @@ import os
 
 # %%
 mne.set_log_level(False)
-mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
-
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+pd.set_option('display.float_format', lambda x: '%.7f' % x)
 
 # %%
 channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3','C3','P3','P4','C4','F4','Pz']]
@@ -51,17 +51,15 @@ for filename in os.listdir(path):
 lstPIds = list(set(lstPIds))
 print(lstPIds)
 
+data = pd.read_csv('./dfEEG.csv', delimiter=',')
 
-# %%
-def normalize(values, actual_bounds, desired_bounds):
-    return [desired_bounds[0] + (x - actual_bounds[0]) * (desired_bounds[1] - desired_bounds[0]) / (actual_bounds[1] - actual_bounds[0]) for x in values]
 
 # %%
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 3):
-       continue
+    #if (pid != 1):
+    #    continue
     # if (pid > 1):
     #         break
     print("pid:", pid)
@@ -76,7 +74,7 @@ for pid in tqdm.tqdm(lstPIds):
     dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
     
     dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")#.fillna(method='ffill')
-    dfAll = dfAll.sort_values(by="Time") # inplace?
+    dfAll = dfAll.sort_values(by="Time")
     
     dfAll = dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"] )
     dfAll.fillna(method='ffill', inplace=True)
@@ -86,7 +84,7 @@ for pid in tqdm.tqdm(lstPIds):
 
     for x in range(1, 8):  
         
-        # if(x > 1):
+        # if(x > 2):
         #     break
         
         # Prepare data 
@@ -95,20 +93,37 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=300
+        sfreq=250
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
+        # why?
         # Scale the data from the MNE internal unit V to µV
         # ?
-        samples = df.T#*1e-6
-        
+        samples = df.T*1e-6
 
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
         # raw.plot(scalings='20e-4')
-        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd(average=True)
+        
+        raw.notch_filter(50)
+        # raw.set_eeg_reference('average', projection=True)
+        
+        # raw.plot_psd()
+
+        # endregion
+    
+        # Create  annotations
+        
+        # ICA
+        
+        # rem_annot = mne.Annotations(onset=[0, 360, 720, 1080, 1440, 1800, 2160],
+        #                             duration=[360]*7,
+        #                             description=['Blocks'] * 7)
+        # raw.set_annotations(rem_annot)
+        # (rem_events,rem_event_dict) = mne.events_from_annotations(raw)
+        
+        #%%.
         
                 
         ### independent component analysis (ICA)
@@ -119,39 +134,44 @@ for pid in tqdm.tqdm(lstPIds):
         # ica.plot_properties(raw, picks=ica.exclude)
         # orig_raw = raw.copy()
         # raw.load_data()
-        # ica.apply(raw)     
-
+        # ica.apply(raw)
+        
+        #%%.
     
         # notch filter and reference
+        # region
                             
         # notch filter 50Hz interference. don't think it's necessary?
-        raw.notch_filter(50, n_jobs=-1)
+        # raw.notch_filter(50)
         
         # set eeg reference?
         raw.set_eeg_reference('average', projection=True)
         #raw.set_eeg_reference(ref_channels=['Pz'])
-        # raw.plot_psd()
+    
+        #raw.plot_psd()
+        #raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.theta[0], highpass=bands.theta[1])
 
+        # endregion
         
         #plot alpha and theta 
         if(plot_plots):
             # filter out alpha and theta
             # region
-            raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
+            raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1])
             # filter out Theta
-            raw_theta = raw.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
+            raw_theta = raw.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1])
             
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
 
-            raw_alpha.plot_psd(ax = axs0[0],show=False, n_jobs=1)
-            raw_theta.plot_psd(ax = axs0[1],show=False, n_jobs=1)
+            raw_alpha.plot_psd(ax = axs0[0],show=False)
+            raw_theta.plot_psd(ax = axs0[1],show=False)
             
             axs1 = subfigs[1].subplots(2, 1)
-            raw_theta.plot_psd_topo(axes = axs1[0],show=False, n_jobs=1)
-            raw_theta.plot_psd_topo(axes = axs1[1],show=False, n_jobs=1)
+            raw_theta.plot_psd_topo(axes = axs1[0],show=False)
+            raw_theta.plot_psd_topo(axes = axs1[1],show=False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -159,8 +179,49 @@ for pid in tqdm.tqdm(lstPIds):
                 filepath = "../Plots/PID_" + str(pid) + "-Block_" + str(x)  + "-raw_psd_topo.png"
                 plt.savefig(filepath)
 
-      
-        ### Compute the power spectral density (PSD)
+
+        # Create equal length epochs 
+       
+        # epochs = mne.make_fixed_length_epochs(raw, preload=False, duration = 100)
+        # #epochs.load_data().filter(l_freq=8, h_freq=12)
+        # #alpha_data = epochs.get_data() 
+        
+        # # plot 
+        # bands = [(0, 4, 'Delta'), (4, 8, 'Theta'), (8, 12, 'Alpha'),(12, 30, 'Beta'), (30, 45, 'Gamma')]
+        
+        # if(plot_plots):
+
+        #     epochs.plot_psd_topomap(bands=bands, normalize=True)
+        
+        # evoked = epochs.average()
+        # #evoked.plot_joint(picks='eeg')
+        # #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
+    
+
+        #### morlet test             
+        #%%.
+        
+        # freqs2 = np.logspace(*np.log10([2, 35]), num=8)
+        # n_cycles = freqs2 / 2
+        # power, itc = mne.time_frequency.tfr_morlet(epochs, freqs=freqs2, n_cycles=n_cycles, use_fft=True,
+        #                 return_itc=True, decim=3, n_jobs=None)
+        
+        # power.plot_topo(mode='logratio', baseline=(-0.5, 0), title='Average power')
+        # ##power.plot( mode='logratio', baseline=(-0.5, 0), title="meh")
+
+        # fig3, axes = plt.subplots(1, 2, figsize=(7, 4))
+        # topomap_kw = dict(mode='logratio', baseline=(-0.5, 0),  tmin=0.0, tmax=10.0,show=False)
+        # plot_dict = dict(Alpha=dict(fmin=8, fmax=12), Theta=dict(fmin=4, fmax=8))
+        # for ax, (title, fmin_fmax) in zip(axes, plot_dict.items()):
+        #     power.plot_topomap(**fmin_fmax, axes=ax, **topomap_kw)
+        #     ax.set_title(title)
+        # fig3.tight_layout()
+        # fig3.show()
+        
+        # power.plot_joint( baseline=(-0.5, 0), mode='mean')
+
+        #%%.
+        ### Compute the power spectral density (PSD) using psd multitapers. 
         
         group1 = raw.copy().pick_channels(['F3', 'F4'])
         group2 = raw.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
@@ -179,22 +240,18 @@ for pid in tqdm.tqdm(lstPIds):
             for m in range(len(method)):
 
                 if(method[m]) == 'Multitaper':
-                    psds, freqs = psd_multitaper(raw, low_bias=False,
+                    psds, freqs = psd_multitaper(raw, low_bias=True,
                                 proj=False, picks=picks,
-                                n_jobs=-1, adaptive=False, normalization='length')
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True) 
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
+                                n_jobs=1, adaptive=False, normalization='full')
                 elif(method[m]) == 'Welch':
                     psds, freqs = psd_welch(raw,
                                 proj=False, picks=picks,
-                                n_jobs=2, n_overlap=150, n_fft=300)
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True)
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-
+                                n_jobs=1, n_overlap=150, n_fft=300)
+                    
+                # Normalize the PSDs ?
+                #psds /= np.sum(psds, axis=-1, keepdims=True)
+                #psds = 10 * np.log10(psds)
+            
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
@@ -242,6 +299,7 @@ for pid in tqdm.tqdm(lstPIds):
                         axes[1,ind].plot(freqs[idx], psds_mean[idx], color='k')
                         axes[1,ind].fill_between(freqs[idx], psds_mean[idx] - psds_std, psds_mean[idx] + psds_std,
                                         color='k', alpha=.5)
+                        #axes[1,ind].plot(freqs[np.argmax(psds_mean[idx])], np.max(psds_mean[idx]), '.r',alpha=0.5)
                         axes[1,ind].set_title(method[m] + " PSD " + label + ' power', {'fontsize' : 7})
                     
                     fig.suptitle("PID " + str(pid) + " block " + str(x) + " " + str(channel_groups[grp_nr]))
