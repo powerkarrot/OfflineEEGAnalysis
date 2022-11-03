@@ -156,30 +156,19 @@ for pid in tqdm.tqdm(lstPIds):
             picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
                     stim=False)
                     
-            method = ['multitaper', 'welch']
+            methods = ['multitaper', 'welch']
     
-            for m in range(len(method)):
-
-                if(method[m]) == 'multitaper':
-                    
-                    spectrum = raw.compute_psd(method='multitaper')
-                    psds, freqs = spectrum.get_data(return_freqs=True)
-           
-                    # Normalize the PSDs ?
-                    #psds /= np.sum(psds, axis=-1, keepdims=True) 
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-                elif(method[m]) == 'welch':
-                    
-                    spectrum = raw.compute_psd(method='welch')
-                    psds, freqs = spectrum.get_data(return_freqs=True)
-                    
-                    # Normalize the PSDs ?
-                    #psds /= np.sum(psds, axis=-1, keepdims=True)
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-                    # Normalize the PSDs ?
+            for m, method in enumerate(methods):
+                
+                spectrum = raw.compute_psd(method= method)
+                psds, freqs = spectrum.get_data(return_freqs=True)
+                
+                # Normalize the PSDs ?
                 psds /= np.sum(psds, axis=-1, keepdims=True)
+                
+                # convert to dB
+                #psds = 10 * np.log10(psds)
+                
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
@@ -212,21 +201,18 @@ for pid in tqdm.tqdm(lstPIds):
 
                     fig, axes = plt.subplots(2, 2, figsize=(7, 3))
                     for ind, (label, band_def) in enumerate(bands):
-
-                        # Get the power values across channels for the current band
-                        f, psds1 = trim_spectrum(freqs, psds,  band_def)
                         
-                        raw.compute_psd(method=method[m]).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
+                        raw.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
 
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
-                        axes[0,ind].set_title(method[m] + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
+                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
 
                         psds_std = (psds_mean[idx]).std(0)
                         peak = freqs[np.argmax(psds_mean[idx])]
                         axes[1,ind].plot(freqs[idx], psds_mean[idx], color='k')
                         axes[1,ind].fill_between(freqs[idx], psds_mean[idx] - psds_std, psds_mean[idx] + psds_std,
                                         color='k', alpha=.5)
-                        axes[1,ind].set_title(method[m] + " PSD " + label + ' power', {'fontsize' : 7})
+                        axes[1,ind].set_title(method + " PSD " + label + ' power', {'fontsize' : 7})
                     
                     fig.suptitle("PID " + str(pid) + " block " + str(x) + " " + str(channel_groups[grp_nr]))
                     fig.set_constrained_layout(True)
@@ -235,7 +221,7 @@ for pid in tqdm.tqdm(lstPIds):
                         filepath = "../Plots/PID_" + str(pid) + "-Block_" + str(x) + "-Group_" + str(grp_nr) + ".png"
                         plt.savefig(filepath)
             
-                pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method[m]])
+                pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method])
                    
         if(draw_plots):
 
