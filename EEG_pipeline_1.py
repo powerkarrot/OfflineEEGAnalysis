@@ -3,6 +3,7 @@ import numpy as np
 import mne
 from mne.time_frequency import psd_multitaper, psd_welch
 import pandas as pd
+import pickle
 import tqdm 
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -34,9 +35,9 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = True       
+plot_plots = False       
 save_plots = False
-draw_plots = True
+draw_plots = False
 
 # %%
 
@@ -63,7 +64,25 @@ bads = [[[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []]
 ]
+
+# %%
+
+# ICA template. 
+# import pickle if it exists else run script and create template
+try:
+    with open('./ica/pipeline_1/ica_template.pickle', 'rb') as inp:
+        ica_template = pickle.load(inp)
+except:
+    ica_template = None
+try:
+    with open('./ica/pipeline_1/exclude.pickle', 'rb') as inp:
+        ica_exclude = pickle.load(inp)
+except:
+    ica_exclude = None
 
 # %%
 pws_lst = list()
@@ -83,8 +102,8 @@ print(lstPIds)
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 5):
-       continue
+    # if (pid != 1):
+    #    continue
     # if (pid > 1):
     #         break
     print("pid:", pid)
@@ -107,7 +126,8 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.dropna()
     
 
-    for x in range(1, 2):  
+    for x in range(1, 8):  
+        print("Block",x)
         
         # if(x > 1):
         #     break
@@ -140,7 +160,7 @@ for pid in tqdm.tqdm(lstPIds):
         # Visual inspection of bad channels
         # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        print("Bads are",  raw.info['bads'])
+        #print("Bads are",  raw.info['bads'])
         raw.interpolate_bads()
         
         #raw.plot(scalings='20e+4')
@@ -156,37 +176,60 @@ for pid in tqdm.tqdm(lstPIds):
         #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
         reject = get_rejection_threshold(epochs, ch_types = 'eeg')
         reject['eeg'] = reject['eeg']
-        print("The rejection dictionary is %s " %reject)
-        
-        # Remove bad epochs
-        # TODO
+        #print("The rejection dictionary is %s " %reject)
         epochs.drop_bad(reject=reject)  
-        epochs.plot_drop_log()
+        #epochs.plot_drop_log()
         
-        evoked = epochs.average()
+        
 
         # independent component analysis (ICA)
         # TODO
-        ica = mne.preprocessing.ICA(method="fastica", random_state=97, max_iter='auto')
-        ica.fit(epochs)
-        #ica.fit(epochs)
-        ica.plot_sources(epochs)
-        ica.plot_components()
-        #ica.plot_properties(epochs, picks=ica.exclude)
+        ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
 
-
-        ica.plot_overlay(evoked, exclude=[0, 1, 2, 3, 5], picks='eeg')
-        
-        ica.exclude = [0, 2, 3 , 4] 
-        # orig_raw = raw.copy()s
-        # raw.load_data()
         epochs.load_data()
-        ica.apply(epochs)   
-        #ica.plot_sources(epochs)
 
-        # set eeg reference
+        if ica_template == None:
+            ica.fit(epochs)
+            #ica.fit(epochs)
+            ica.plot_sources(epochs)
+            ica.plot_components()
+            
+            with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
+                pickle.dump(ica, f)
+            with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
+                pickle.dump([0,1,2,3,4], f)
+            
+            #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
+            
+            #ica.save('./ica/template_1' + '/' + pid + '-ica.fif', overwrite=True)
         
-        #plot alpha and theta 
+        #if (template == None):
+            
+        # ica.fit(epochs)
+        # ica.plot_sources(epochs)
+        # ica.plot_components()
+         
+        #ica.plot_properties(epochs, picks=ica.exclude)s
+        else:
+            ica.fit(epochs)
+            
+            # ica.exclude = [0, 1, 2, 3, 4] 
+            # ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
+            #ica.plot_components()
+
+            icas = [ica_template, ica]
+
+            for x, excl in enumerate(ica_exclude):
+                mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+                ica.exclude = ica.labels_['exclude']
+
+            ica.apply(epochs)   
+            #ica.plot_sources(epochs)
+
+        # Average all epochs
+        evoked = epochs.average()     
+           
+        #Plot alpha and theta PSD
         if(plot_plots):
     
             fig = plt.figure( figsize=(7, 3))
@@ -209,7 +252,6 @@ for pid in tqdm.tqdm(lstPIds):
 
       
         ### Compute the power spectral density (PSD)
-        
         group1 = epochs.copy().pick_channels(['F3', 'F4'])
         group2 = epochs.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
         group3 = epochs.copy().pick_channels(['P3', 'Pz', 'P4'])
