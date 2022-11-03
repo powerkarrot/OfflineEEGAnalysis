@@ -119,29 +119,24 @@ for pid in tqdm.tqdm(lstPIds):
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
-        # why?
-        # Scale the data from the MNE internal unit V to µV
-        # ?
-        samples = df.T#*1e-6
+        samples = df.T
         
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
         
-        #high pass filter to remove slow drifts, 70 Hz low pass
+        # high pass filter to remove slow drifts, 70 Hz low pass
         raw.filter(1., 70, None, fir_design='firwin')
-        
-        #remove power line interferance
+         
+        # remove power line interferance
         raw.notch_filter(50, n_jobs=-1)
         
-
+        # set EEG reference
+        raw.set_eeg_reference('average', projection=True)
+        #raw.set_eeg_reference(ref_channels=['Pz'])
         
         # Visual inspection of bad channels
         # TODO
-        
-        raw.set_eeg_reference('average', projection=True)
-
-     
-        #raw.set_eeg_reference(ref_channels=['Pz'])
+        # epochs.interpolate_bads()
         
         #raw.plot(scalings='20e+4')
         # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
@@ -150,28 +145,23 @@ for pid in tqdm.tqdm(lstPIds):
         # Create equal length epochs of 4 seconds
         epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)
     
-  
         #evoked.plot_joint(picks='eeg')
         #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
         
-            
         # Autoreject based on rejection threshold
         # TODO
-        # epochs.interpolate_bads()
         
-        #reject = dict(eeg=400e-6)# unit: uV (EEG channels) dont forget the sample conversion to uV
-        reject = get_rejection_threshold(epochs)
+        #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
+        reject = get_rejection_threshold(epochs, ch_types = 'eeg')
         reject['eeg'] = reject['eeg']
         print("The rejection dictionary is %s " %reject)
+        
         # Remove bad epochs
         # TODO
-        #epochs.drop_bad(reject=reject)  
+        epochs.drop_bad(reject=reject)  
         epochs.plot_drop_log()
-        # raw.plot()
-        # epochs.plot()
         
         evoked = epochs.average()
-
 
         # independent component analysis (ICA)
         # TODO
@@ -195,28 +185,22 @@ for pid in tqdm.tqdm(lstPIds):
         ica.apply(epochs)   
         #ica.plot_sources(epochs)
 
-  
         # set eeg reference
         
         #plot alpha and theta 
-        if(False):
-            # filter out alpha and theta
-            # region
-            raw_alpha = epochs.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
-            # filter out Theta
-            raw_theta = epochs.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
-            
+        if(plot_plots):
+    
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
 
-            raw_alpha.plot_psd(ax = axs0[0],show=False, n_jobs=1)
-            raw_theta.plot_psd(ax = axs0[1],show=False, n_jobs=1)
-            
+            epochs.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
+            epochs.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) #  .plot_topomap({'alpha': (8,12)},  normalize=True, axes=axes[1], show=False)
+        
             axs1 = subfigs[1].subplots(2, 1)
-            raw_alpha.compute_psd().plot_topomap( normalize = True, axes = axs1[0],show=False)
-            raw_theta.compute_psd().plot_topomap(normalize = True, axes = axs1[1],show=False)
+            evoked.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
+            evoked.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -268,7 +252,6 @@ for pid in tqdm.tqdm(lstPIds):
 
                 #Mean of all channels
                 psds_mean = psds.mean(0)
-                
             
                 freq_res = freqs[1] - freqs[0]
                 
@@ -294,9 +277,6 @@ for pid in tqdm.tqdm(lstPIds):
 
                 # Extract the power values from the detected peaks
                 # Plot the topographies across different frequency bands
-                
-               
-                
                                 
                 if(plot_plots):
 
@@ -307,12 +287,8 @@ for pid in tqdm.tqdm(lstPIds):
 
                         f, psds1 = trim_spectrum(freqs, psds,  band_def)
                         
-                        # Create a topomap for the current oscillation bandca
-                        #epochs.compute_psd().plot_topomap({'theta': (4, 8)}, normalize=True)
-                        epochs.compute_psd(method=method[m]).plot_topomap({label: band_def},  normalize=True, axes=axes[0, ind], show=False)
-
-                        # mne.viz.plot_topomap(psds1[:, 1], raw.info, cmap=cm.viridis,
-                        #                     axes=axes[0, ind], show=False, ch_type='grad')
+                        # Create a topomap for the current oscillation band
+                        epochs.compute_psd(method=method[m]).plot_topomap({label: band_def}, ch_type='eeg', show_names=True, normalize=True, axes=axes[0, ind], show=False)
                         
                         axes[0,ind].set_title(method[m] + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
                         

@@ -154,24 +154,19 @@ for pid in tqdm.tqdm(lstPIds):
         ica.apply(raw)     
         
         #plot alpha and theta 
-        if(False):
-            # filter out alpha and theta
-            # region
-            raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
-            # filter out Theta
-            raw_theta = raw.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
+        if(plot_plots):
             
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
 
-            raw_alpha.plot_psd(ax = axs0[0],show=False, n_jobs=1)
-            raw_theta.plot_psd(ax = axs0[1],show=False, n_jobs=1)
-            
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) 
+        
             axs1 = subfigs[1].subplots(2, 1)
-            raw_theta.plot_psd_topo(axes = axs1[0],show=False, n_jobs=1)
-            raw_theta.plot_psd_topo(axes = axs1[1],show=False, n_jobs=1)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -194,16 +189,17 @@ for pid in tqdm.tqdm(lstPIds):
             picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
                     stim=False)
                     
-            method = ['Multitaper', 'Welch']
+            method = ['multitaper', 'welch']
             
             for m in range(len(method)):
 
-                if(method[m]) == 'Multitaper':
+                # TODO redo this lmao
+                if(method[m]) == 'multitaper':
                               
                     spectrum = raw.compute_psd(method='multitaper', picks = picks, n_jobs = -1)
                     psds, freqs = spectrum.get_data(return_freqs=True)
        
-                elif(method[m]) == 'Welch':
+                elif(method[m]) == 'welch':
                     spectrum = raw.compute_psd(method='welch', picks = picks, n_jobs = 2)
                     psds, freqs = spectrum.get_data(return_freqs=True)
         
@@ -250,8 +246,8 @@ for pid in tqdm.tqdm(lstPIds):
                         f, psds1 = trim_spectrum(freqs, psds,  band_def)
                         
                         # Create a topomap for the current oscillation bandca
-                        mne.viz.plot_topomap(psds1[:, 1], raw.info, cmap=cm.viridis,
-                                            axes=axes[0, ind], show=False, ch_type='grad')
+                        raw.compute_psd(method=method[m]).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
+
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
                         axes[0,ind].set_title(method[m] + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
 
@@ -285,7 +281,7 @@ ys = ['AlphaPow', 'DeltaPow', 'AlphaTheta']
 
 for y in range(4):
     for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], ax=axes[y,i],showfliers=False)
+        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'multitaper')], ax=axes[y,i],showfliers=False)
         #sns.stripplot(x="BlockNumber", y = ys[i], data=dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[y,i])
         axes[y,i].set_title( str(ys[i]) + " Group " + str(channel_groups[y]), fontsize=10)
         axes[y,i].set_ylabel('Power', fontsize=7)
@@ -295,7 +291,7 @@ f.suptitle("Multitaper Distribution")
 f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
 for y in range(4):
     for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Welch')], ax=axes[y,i],showfliers=False)
+        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'welch')], ax=axes[y,i],showfliers=False)
         axes[y,i].set_title( str(ys[i]) + " Group " +  str(channel_groups[y]), fontsize=10)
         axes[y,i].set_ylabel('Power', fontsize=7)
         axes[y,i].set_xlabel('Block', fontsize=7)
