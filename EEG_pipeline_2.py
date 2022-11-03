@@ -32,6 +32,8 @@ channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3',
 ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
 ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
+s_freqs = 300
+
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
 plot_plots = True       
@@ -102,7 +104,7 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.dropna()
        
 
-    for x in range(1, 2):  
+    for x in range(1, 8):  
         
         # if(x > 1):
         #     break
@@ -113,52 +115,46 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=250 # i really think its 300 -.-
+        sfreq=300 # i really think its 300 -.-
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
-        # why?
-        # Scale the data from the MNE internal unit V to µV
-        # ?
+        # Scale the data from V to µV
+        # TODO check
         samples = df.T#*1e-6
         
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
         
         #high pass filter to remove slow drifts, 70 Hz low pass
-        raw.filter(1., 70., None, fir_design='firwin')
+        #raw.filter(1., 70., None, fir_design='firwin')
+        raw.filter(.1, 70, None, fir_design='firwin')
+
         
         #remove power line interferance
-        raw.notch_filter(50., n_jobs=-1)
+        raw.notch_filter(50, n_jobs=-1)
         
         # set eeg reference
         raw.set_eeg_reference('average', projection=True)
         
         # Visual inspection of bad channels
         # TODO
-        # raw.plot(scalings='20e-4')
-        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd()
-    
- 
+   
         # # independent component analysis (ICA)
-        # # TODO
-        #reject = dict(eeg=400e-6)# unit: uV (EEG channels) dont forget the sample conversion to uV
+        # TODO Finish
+        
         ica = mne.preprocessing.ICA(method = "infomax", n_components=7, random_state=97, max_iter='auto')
-        #ica.fit(raw, reject = reject)
         ica.fit(raw)
         # ica.plot_sources(raw)
-        # ica.plot_components()
+        ica.plot_components()
         ica.exclude = [0, 2, 3, 4] 
      
         #ica.plot_properties(raw, picks=ica.exclude)
         raw.load_data()
         ica.apply(raw)     
-
-        #raw.set_eeg_reference(ref_channels=['Pz'])
         
         #plot alpha and theta 
-        if(plot_plots):
+        if(False):
             # filter out alpha and theta
             # region
             raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
@@ -199,31 +195,23 @@ for pid in tqdm.tqdm(lstPIds):
                     stim=False)
                     
             method = ['Multitaper', 'Welch']
+            
             for m in range(len(method)):
 
                 if(method[m]) == 'Multitaper':
-                    
-                    psds, freqs = psd_multitaper(raw, low_bias=False,
-                                proj=False, picks=picks,
-                                n_jobs=-1, adaptive=False, normalization='length')
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True) 
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
+                              
+                    spectrum = raw.compute_psd(method='multitaper', picks = picks, n_jobs = -1)
+                    psds, freqs = spectrum.get_data(return_freqs=True)
+       
                 elif(method[m]) == 'Welch':
-                    psds, freqs = psd_welch(raw,
-                                proj=False, picks=picks,
-                                n_jobs=2, n_overlap=150, n_fft=300)
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True) 
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-
-
-                # # Normalize the PSDs ?
-                # psds /= np.sum(psds, axis=-1, keepdims=True) 
+                    spectrum = raw.compute_psd(method='welch', picks = picks, n_jobs = 2)
+                    psds, freqs = spectrum.get_data(return_freqs=True)
+        
+                # Normalize the PSDs ?
+                psds /= np.sum(psds, axis=-1, keepdims=True) 
                 # #convert to DB
                 # psds = 10 * np.log10(psds) * (-1) # erm lul wut
+
 
                 #Mean of all channels
                 psds_mean = psds.mean(0)
