@@ -43,23 +43,26 @@ draw_plots = True
 # %%
 # bad channels
 # TODO fill for all participants :')
-bads = [[['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [[], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []],
-        [['F2', 'F3'], [], ['C4'], [], [], [],  []]
+# Format: bads[pid][block]
+# example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
+
+bads = [[[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
 ]
 
 # %%
@@ -135,8 +138,10 @@ for pid in tqdm.tqdm(lstPIds):
         #raw.set_eeg_reference(ref_channels=['Pz'])
         
         # Visual inspection of bad channels
-        # TODO
-        # epochs.interpolate_bads()
+        # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
+        raw.info['bads'] =  bads[pid-1][x-1]
+        print("Bads are",  raw.info['bads'])
+        raw.interpolate_bads()
         
         #raw.plot(scalings='20e+4')
         # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
@@ -148,8 +153,6 @@ for pid in tqdm.tqdm(lstPIds):
         #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
         
         # Autoreject based on rejection threshold
-        # TODO
-        
         #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
         reject = get_rejection_threshold(epochs, ch_types = 'eeg')
         reject['eeg'] = reject['eeg']
