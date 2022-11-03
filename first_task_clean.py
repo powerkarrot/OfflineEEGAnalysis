@@ -34,9 +34,9 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = False       
+plot_plots = True       
 save_plots = False
-draw_plots = False
+draw_plots = True
 
 # %%
 pws_lst = list()
@@ -60,7 +60,7 @@ def normalize(values, actual_bounds, desired_bounds):
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 3):
+    if (pid != 5):
        continue
     # if (pid > 1):
     #         break
@@ -109,49 +109,31 @@ for pid in tqdm.tqdm(lstPIds):
         # raw.plot(scalings='20e-4')
         # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
         # raw.plot_psd(average=True)
-        
-                
-        ### independent component analysis (ICA)
-        
-        # ica = mne.preprocessing.ICA(n_components=7, random_state=97, max_iter=800)
-        # ica.fit(raw)
-        # ica.exclude = [1, 2]  # details on how we picked these are omitted here
-        # ica.plot_properties(raw, picks=ica.exclude)
-        # orig_raw = raw.copy()
-        # raw.load_data()
-        # ica.apply(raw)     
 
-    
-        # notch filter and reference
-                            
+        raw.filter(.1, 70, None, fir_design='firwin')
+         
         # notch filter 50Hz interference. don't think it's necessary?
         raw.notch_filter(50, n_jobs=-1)
         
-        # set eeg reference?
+        # Set eeg reference
         raw.set_eeg_reference('average', projection=True)
         #raw.set_eeg_reference(ref_channels=['Pz'])
         # raw.plot_psd()
 
-        
         #plot alpha and theta 
         if(plot_plots):
-            # filter out alpha and theta
-            # region
-            raw_alpha = raw.copy().filter(l_freq=bands.alpha[0], h_freq=bands.alpha[1], n_jobs=-1)
-            # filter out Theta
-            raw_theta = raw.copy().filter(l_freq=bands.theta[0], h_freq=bands.theta[1], n_jobs=-1)
-            
+         
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
-
-            raw_alpha.plot_psd(ax = axs0[0],show=False, n_jobs=1)
-            raw_theta.plot_psd(ax = axs0[1],show=False, n_jobs=1)
-            
+                
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) 
+        
             axs1 = subfigs[1].subplots(2, 1)
-            raw_theta.plot_psd_topo(axes = axs1[0],show=False, n_jobs=1)
-            raw_theta.plot_psd_topo(axes = axs1[1],show=False, n_jobs=1)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -174,27 +156,19 @@ for pid in tqdm.tqdm(lstPIds):
             picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
                     stim=False)
                     
-            method = ['Multitaper', 'Welch']
+            methods = ['multitaper', 'welch']
     
-            for m in range(len(method)):
-
-                if(method[m]) == 'Multitaper':
-                    psds, freqs = psd_multitaper(raw, low_bias=False,
-                                proj=False, picks=picks,
-                                n_jobs=-1, adaptive=False, normalization='length')
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True) 
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-                elif(method[m]) == 'Welch':
-                    psds, freqs = psd_welch(raw,
-                                proj=False, picks=picks,
-                                n_jobs=2, n_overlap=150, n_fft=300)
-                    # Normalize the PSDs ?
-                    psds /= np.sum(psds, axis=-1, keepdims=True)
-                    #convert to DB
-                    #psds = 10 * np.log10(psds) * (-1) # erm lul wut
-
+            for m, method in enumerate(methods):
+                
+                spectrum = raw.compute_psd(method= method)
+                psds, freqs = spectrum.get_data(return_freqs=True)
+                
+                # Normalize the PSDs ?
+                psds /= np.sum(psds, axis=-1, keepdims=True)
+                
+                # convert to dB
+                #psds = 10 * np.log10(psds)
+                
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
@@ -227,22 +201,18 @@ for pid in tqdm.tqdm(lstPIds):
 
                     fig, axes = plt.subplots(2, 2, figsize=(7, 3))
                     for ind, (label, band_def) in enumerate(bands):
-
-                        # Get the power values across channels for the current band
-                        f, psds1 = trim_spectrum(freqs, psds,  band_def)
                         
-                        # Create a topomap for the current oscillation bandca
-                        mne.viz.plot_topomap(psds1[:, 1], raw.info, cmap=cm.viridis,
-                                            axes=axes[0, ind], show=False, ch_type='grad')
+                        raw.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
+
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
-                        axes[0,ind].set_title(method[m] + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
+                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
 
                         psds_std = (psds_mean[idx]).std(0)
                         peak = freqs[np.argmax(psds_mean[idx])]
                         axes[1,ind].plot(freqs[idx], psds_mean[idx], color='k')
                         axes[1,ind].fill_between(freqs[idx], psds_mean[idx] - psds_std, psds_mean[idx] + psds_std,
                                         color='k', alpha=.5)
-                        axes[1,ind].set_title(method[m] + " PSD " + label + ' power', {'fontsize' : 7})
+                        axes[1,ind].set_title(method + " PSD " + label + ' power', {'fontsize' : 7})
                     
                     fig.suptitle("PID " + str(pid) + " block " + str(x) + " " + str(channel_groups[grp_nr]))
                     fig.set_constrained_layout(True)
@@ -251,7 +221,7 @@ for pid in tqdm.tqdm(lstPIds):
                         filepath = "../Plots/PID_" + str(pid) + "-Block_" + str(x) + "-Group_" + str(grp_nr) + ".png"
                         plt.savefig(filepath)
             
-                pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method[m]])
+                pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method])
                    
         if(draw_plots):
 
@@ -267,7 +237,7 @@ ys = ['AlphaPow', 'DeltaPow', 'AlphaTheta']
 
 for y in range(4):
     for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], ax=axes[y,i],showfliers=False)
+        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'multitaper')], ax=axes[y,i],showfliers=False)
         #sns.stripplot(x="BlockNumber", y = ys[i], data=dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[y,i])
         axes[y,i].set_title( str(ys[i]) + " Group " + str(channel_groups[y]), fontsize=10)
         axes[y,i].set_ylabel('Power', fontsize=7)
@@ -277,7 +247,7 @@ f.suptitle("Multitaper Distribution")
 f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
 for y in range(4):
     for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Welch')], ax=axes[y,i],showfliers=False)
+        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'welch')], ax=axes[y,i],showfliers=False)
         axes[y,i].set_title( str(ys[i]) + " Group " +  str(channel_groups[y]), fontsize=10)
         axes[y,i].set_ylabel('Power', fontsize=7)
         axes[y,i].set_xlabel('Block', fontsize=7)
