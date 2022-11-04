@@ -72,16 +72,30 @@ bads = [[[], [], [], [], [], [],  []],
 
 # ICA template. 
 # import pickle if it exists else run script and create template
-try:
-    with open('./ica/pipeline_2/ica_template.pickle', 'rb') as inp:
-        ica_template = pickle.load(inp)
-except:
-    ica_template = None
-try:
-    with open('./ica/pipeline_2/exclude.pickle', 'rb') as inp:
-        ica_exclude = pickle.load(inp)
-except:
-    ica_exclude = None
+ica_templates = []
+ica_excludes = []
+
+count = 0
+dir_path = r'./ica/pipeline_2/'
+for path in os.scandir(dir_path):
+    if path.is_file():
+        count += 1
+count /= 2
+for f in range(int(count)):
+    try:
+        with open('./ica/pipeline_2/ica_template-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_template = pickle.load(inp)
+            ica_templates.append(ica_template)
+    except Exception as e:
+        print(e)
+        ica_template = None
+    try:
+        with open('./ica/pipeline_2/exclude-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_exclude = pickle.load(inp)
+            ica_excludes.append(ica_exclude)
+    except Exception as e:
+        print(e)
+        ica_exclude = None
     
 #all ICAs to compute
 icas = []
@@ -111,7 +125,7 @@ raw_dict = {}
 
 for pid in tqdm.tqdm(lstPIds):
     
-    # if (pid != 2):
+    # if (pid != 16):
     #     continue
     # if (pid > 2):
     #         break
@@ -136,8 +150,8 @@ for pid in tqdm.tqdm(lstPIds):
 
     for x in range(1, NUM_BLOCKS+1):  
         
-        # if(x > 1):
-        #     break
+        # if(x > 2):
+        #     continue
         
         # Prepare data 
         # region
@@ -166,53 +180,67 @@ for pid in tqdm.tqdm(lstPIds):
         raw.set_eeg_reference('average', projection=True)
         
         # Visual inspection of bad channels
-         # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
+         # TODO, empty list for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
         #raw.interpolate_bads()
         
         # # independent component analysis (ICA)        
         ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
         raw.load_data()
+        ica.fit(raw)
 
         # Pick a template if none is saved
-        if ica_template == None:
-            
-            ica.fit(raw)
-            #ica.fit(epochs)
+        #TODO put this in separate script.
+        pick_ic_as_template = False
+        if(pick_ic_as_template):
+                        #ica.fit(epochs)
             ica.plot_sources(raw)
-            
-            #TODO allow for more ICAs
-            pick_ic_as_template = False
-            if(pick_ic_as_template): # PID 2 block 1 atm
+            #ic_excludes = [0,1,2,3,4,5,6] # pid 2 block 1
+            #ic_excludes = [3] # pid 11 block 1
+            #ic_excludes = [1,2] # pid 14 block 1
+            ic_excludes = [] # pid 
+
+            ready_to_write = False # lol. change here i guess :D or i could just to a designated script. eventually.
+            if(ready_to_write):
+                #TODO allow for more ICAs
+                # PID 2 block 1 atm
+                count = 0
+                dir_path = r'./ica/pipeline_2/'
+                for path in os.scandir(dir_path):
+                    if path.is_file():
+                        count += 1
+                count /= 2
                 
-                with open('./ica/pipeline_2/ica_template.pickle', 'wb') as f:
+                with open('./ica/pipeline_2/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(ica, f)
-                with open('./ica/pipeline_2/exclude.pickle', 'wb') as f:
-                    pickle.dump([0,1,2,3,4], f)
+                with open('./ica/pipeline_2/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
+                    pickle.dump(ic_excludes, f)
                 
-                ica.plot_overlay(raw, exclude=[0, 1, 2, 3, 4], picks='eeg')
-                ica.plot_properties(raw)
+                ica.plot_overlay(raw, exclude=ic_excludes, picks='eeg')
         
         # save the ICAs for the corrmap 
-        else:
-            ica.fit(raw)
+        #else:
 
-            icas.append(ica)
-            arr_raws.append(raw)
-            # icas_dict[str(pid)+'-'+str(x)] = ica
-            # raws_dict[str(pid)+'-'+str(x)] = raw
+        icas.append(ica)
+        arr_raws.append(raw)
+        # icas_dict[str(pid)+'-'+str(x)] = ica
+        # raws_dict[str(pid)+'-'+str(x)] = raw
 
-            # raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
-            # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
-            #     pickle.dump(ica, f)
+        # raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+        # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
+        #     pickle.dump(ica, f)
 
 
  #%%
 #clean_raws = np.zeros((2, 2),dtype=object)
 clean_raws = np.zeros((len(lstPIds), NUM_BLOCKS),dtype=object)
 
-for x, excl in enumerate(ica_exclude):
-    mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+for n, ic_templ in enumerate(ica_templates):
+    icas.insert(0,ic_templ) #first element of ica array is the template
+    for x, excl in enumerate(ica_excludes[n]):
+        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+    icas.pop(0) # remove template.
+
 
 for i, n in enumerate(icas):
     n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg')
@@ -224,6 +252,9 @@ for i in range(len(lstPIds)):
     for j in range(NUM_BLOCKS):
         clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
         
+# for i in range(2):
+#     for j in range(2):
+#         clean_raws[i][j] = arr_raws[j%2+i*2]        
 #whyyyyyyyyyyy??????
 #clean_raws = np.reshape(arr_raws, (len(lstPIds), NUM_BLOCKS))
 
