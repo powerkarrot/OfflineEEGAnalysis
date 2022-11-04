@@ -189,20 +189,20 @@ for pid in tqdm.tqdm(lstPIds):
         raw.load_data()
         ica.fit(raw)
 
-        # Pick a template if none is saved
+        # Pick templates
         #TODO put this in separate script.
         pick_ic_as_template = False
         if(pick_ic_as_template):
-                        #ica.fit(epochs)
+            
             ica.plot_sources(raw)
-            #ic_excludes = [0,1,2,3,4,5,6] # pid 2 block 1
-            #ic_excludes = [3] # pid 11 block 1
-            #ic_excludes = [1,2] # pid 14 block 1
-            ic_excludes = [] # pid 
+            #exclude_ic = [0,1,2,3,4,5,6] # pid 2 block 1
+            #exclude_ic = [3] # pid 11 block 1
+            #exclude_ic = [1,2] # pid 14 block 1
+            exclude_ic = [] # pid 
+            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
 
             ready_to_write = False # lol. change here i guess :D or i could just to a designated script. eventually.
             if(ready_to_write):
-                #TODO allow for more ICAs
                 # PID 2 block 1 atm
                 count = 0
                 dir_path = r'./ica/pipeline_2/'
@@ -214,9 +214,9 @@ for pid in tqdm.tqdm(lstPIds):
                 with open('./ica/pipeline_2/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(ica, f)
                 with open('./ica/pipeline_2/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(ic_excludes, f)
+                    pickle.dump(exclude_ic, f)
                 
-                ica.plot_overlay(raw, exclude=ic_excludes, picks='eeg')
+                ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
         
         # save the ICAs for the corrmap 
         #else:
