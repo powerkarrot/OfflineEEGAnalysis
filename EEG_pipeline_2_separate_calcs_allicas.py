@@ -245,7 +245,7 @@ for n, ic_templ in enumerate(ica_templates):
 for i, n in enumerate(icas):
     n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg')
     n.exclude = n.labels_['exclude']
-    n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
+    arr_raws[i] = n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
 for i in range(len(lstPIds)):
