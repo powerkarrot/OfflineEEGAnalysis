@@ -106,7 +106,6 @@ print(str(len(lstPIds)) + " subjects")
 
 # %%
 
-#clean_raws = np.zeros((len(lstPIds), 7))
 raw_lst = []
 raw_dict = {}
 
@@ -209,39 +208,28 @@ for pid in tqdm.tqdm(lstPIds):
 
 
  #%%
-#arr_raws = np.array(arr_raws)
 #clean_raws = np.zeros((2, 2),dtype=object)
-clean_raws = np.zeros((len(lstPIds), 7),dtype=object)
+clean_raws = np.zeros((len(lstPIds), NUM_BLOCKS),dtype=object)
 
 for x, excl in enumerate(ica_exclude):
-    icas_labeled = mne.preprocessing.corrmap(icas, [0,excl], label='exclude')
+    mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
 
 for i, n in enumerate(icas):
-    n.exclude = ica.labels_['exclude']
-    ica.apply(arr_raws[i]) # TODO at least i hope so, double check indices
-    ica.plot_overlay(raw, ica.exclude, picks='eeg')
+    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg')
+    n.exclude = n.labels_['exclude']
+    n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
-    
-#clean_epochs = np.reshape(arr_raws, (len(lstPIds),7))
-#clean_raws = np.reshape(arr_raws, (2,2)) # for testing only
-# for i in range (2):
-#     for j in range(2):
-#         print(i,j)
-#         clean_raws[i][j] = arr_raws[j%2+i*2]
-
+# for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
 for i in range(len(lstPIds)):
-    for j in range(7):
-        print(i,j)
-        clean_raws[i][j] = arr_raws[j%7+i*7]
-
-#raw_dict[str(pid)+'-'+ str(x)]= raw
+    for j in range(NUM_BLOCKS):
+        clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
+        
+#whyyyyyyyyyyy??????
+#clean_raws = np.reshape(arr_raws, (len(lstPIds), NUM_BLOCKS))
 
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
 
 # %%        
-
-#whyyyyyyyyyyy??????
-#clean_raws = np.reshape(raw_lst, (len(lstPIds), 7))
 
 pws_lst = list()
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
@@ -250,7 +238,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     # if (pid > 2):
     #     break
     
-    for x in range(1,8):
+    for x in range(1,NUM_BLOCKS+1):
         raw = clean_raws[n][x-1]
         #raw = raw_dict[str(pid)+'-'+ str(x)]
 

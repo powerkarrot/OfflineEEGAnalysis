@@ -29,6 +29,9 @@ plt.rcParams.update({'figure.max_open_warning': 0})
 
 
 # %%
+
+NUM_BLOCKS = 7
+
 channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3','C3','P3','P4','C4','F4','Pz']]
 ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
 ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
@@ -131,7 +134,7 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
     dfAll = dfAll.dropna()
 
-    for x in range(1, 8):  
+    for x in range(1, NUM_BLOCKS+1):  
         
         # if(x > 1):
         #     break
@@ -142,7 +145,7 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=250
+        sfreq=300
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
@@ -194,7 +197,10 @@ for pid in tqdm.tqdm(lstPIds):
             #ica.fit(epochs)
             ica.plot_sources(epochs)
             ica.plot_components()
-            
+            exclude_ic = [0, 1, 2, 3, 4]
+            #ica.plot_properties(epochs, picks=ica.exclude)
+            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg')
+
             #TODO allow for more ICAs
             pick_ic_as_template = False
             if(pick_ic_as_template): # PID 5 block 1 atm
@@ -202,10 +208,8 @@ for pid in tqdm.tqdm(lstPIds):
                 with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
                     pickle.dump(ica, f)
                 with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
-                    pickle.dump([0,1,2,3,4], f)
-                #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
+                    pickle.dump(exclude_ic, f)
             
-        #ica.plot_properties(epochs, picks=ica.exclude)
         
         # save the ICAs for the corrmap 
         else:
@@ -215,26 +219,25 @@ for pid in tqdm.tqdm(lstPIds):
             arr_epochs.append(epochs)
 
             # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
-            # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
-            #     pickle.dump(ica, f)
     
  #%%
  
     #ica.fit(epochs, reject = reject)
-clean_epochs = np.zeros((len(lstPIds), 7))
+clean_epochs = np.zeros((len(lstPIds), NUM_BLOCKS)) # remove
 
 # ica.exclude = [0, 1, 2, 3, 4] 
 # ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
 
 for x, excl in enumerate(ica_exclude):
-    icas_labeled = mne.preprocessing.corrmap(icas, [0,excl], label='exclude')
+    mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
 
 for i, n in enumerate(icas):
-    n.exclude = ica.labels_['exclude']
-    ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices
+    n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg')
+    n.exclude = n.labels_['exclude']
+    n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices
 
 
-clean_epochs = np.reshape(arr_epochs, (len(lstPIds),7))
+clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
@@ -244,11 +247,10 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),7))
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     # if (pid > 2):
     #         break
-    for x in range(1, 8):  
-        #epoch = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+    for x in range(1, NUM_BLOCKS+1):  
         
-        #epochs = clean_epochs[pid-1][x-1] # this still needs to be fixed. 
-        epochs = clean_epochs[n][x-1] # this still needs to be fixed. 
+        #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+        epochs = clean_epochs[n][x-1] 
 
         #print("Cur index", ((x-1)*len(lstPIds)) + pid)
         #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
