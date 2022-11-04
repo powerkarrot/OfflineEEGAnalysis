@@ -3,12 +3,11 @@ import numpy as np
 import mne
 from mne.time_frequency import psd_multitaper, psd_welch
 import pandas as pd
-import pickle
 import tqdm 
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import seaborn as sns
-from autoreject import get_rejection_threshold
+
 
 # composite Simpson's rule
 from scipy.integrate import simpson
@@ -33,13 +32,13 @@ channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3',
 ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
 ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
+s_freqs = 300
+
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
 plot_plots = False       
 save_plots = False
 draw_plots = False
-
-# %%
 
 # %%
 # bad channels
@@ -71,22 +70,6 @@ bads = [[[], [], [], [], [], [],  []],
 
 # %%
 
-# ICA template. 
-# import pickle if it exists else run script and create template
-try:
-    with open('./ica/pipeline_1/ica_template.pickle', 'rb') as inp:
-        ica_template = pickle.load(inp)
-except:
-    ica_template = None
-try:
-    with open('./ica/pipeline_1/exclude.pickle', 'rb') as inp:
-        ica_exclude = pickle.load(inp)
-except:
-    ica_exclude = None
-
-# %%
-pws_lst = list()
-
 lstPIds = []
 path = "./Data/"
 for filename in os.listdir(path):
@@ -100,13 +83,16 @@ print(lstPIds)
 
 # %%
 
+#clean_raws = np.zeros((len(lstPIds), 7))
+raw_lst = []
+raw_dict = {}
+
 for pid in tqdm.tqdm(lstPIds):
     
-    # if (pid != 1):
-    #    continue
+    # if (pid != 5):
+    #     continue
     # if (pid > 1):
     #         break
-    print("pid:", pid)
 
     dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
     dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
@@ -124,10 +110,9 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll.fillna(method='ffill', inplace=True)
     dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
     dfAll = dfAll.dropna()
-    
+       
 
     for x in range(1, 8):  
-        print("Block",x)
         
         # if(x > 1):
         #     break
@@ -138,111 +123,78 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=250
+        sfreq=300 # i really think its 300 -.-
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
-        samples = df.T
+        # Scale the data from V to µV
+        # TODO check
+        samples = df.T#*1e-6
         
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
         
-        # high pass filter to remove slow drifts, 70 Hz low pass
-        raw.filter(1., 70, None, fir_design='firwin')
-         
-        # remove power line interferance
+        #high pass filter to remove slow drifts, 70 Hz low pass
+        #raw.filter(1., 70., None, fir_design='firwin')
+        raw.filter(.1, 70, None, fir_design='firwin')
+
+        
+        #remove power line interferance
         raw.notch_filter(50, n_jobs=-1)
         
-        # set EEG reference
+        # set eeg reference
         raw.set_eeg_reference('average', projection=True)
-        #raw.set_eeg_reference(ref_channels=['Pz'])
         
         # Visual inspection of bad channels
-        # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
+         # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        #print("Bads are",  raw.info['bads'])
-        raw.interpolate_bads()
+        #raw.interpolate_bads()
         
-        #raw.plot(scalings='20e+4')
-        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd()
+        # # independent component analysis (ICA)
+        # TODO Finish, copy from pipeline 1
         
-        # Create equal length epochs of 4 seconds
-        epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)
-        #evoked.plot_joint(picks='eeg')
-        #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
+        # ica = mne.preprocessing.ICA(method = "infomax", n_components=7, random_state=97, max_iter='auto')
+        # ica.fit(raw)
+        # # ica.plot_sources(raw)
+        # #ica.plot_components()
+        # ica.exclude = [0, 2, 3, 4] 
+     
+        # #ica.plot_properties(raw, picks=ica.exclude)
+        # raw.load_data()
+        # ica.apply(raw)  
         
-        # Autoreject based on rejection threshold
-        #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
-        reject = get_rejection_threshold(epochs, ch_types = 'eeg')
-        reject['eeg'] = reject['eeg']
-        #print("The rejection dictionary is %s " %reject)
-        epochs.drop_bad(reject=reject)  
-        #epochs.plot_drop_log()
-        
+        raw_lst.append(raw)
+        raw_dict[str(pid)+'-'+ str(x)]= raw
+
         
 
-        # independent component analysis (ICA)
-        # TODO
-        ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
 
-        epochs.load_data()
+# %%        
 
-        if ica_template == None:
-            ica.fit(epochs)
-            #ica.fit(epochs)
-            ica.plot_sources(epochs)
-            ica.plot_components()
-            
-            with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
-                pickle.dump(ica, f)
-            with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
-                pickle.dump([0,1,2,3,4], f)
-            
-            #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            
-            #ica.save('./ica/template_1' + '/' + pid + '-ica.fif', overwrite=True)
-        
-        #if (template == None):
-            
-        # ica.fit(epochs)
-        # ica.plot_sources(epochs)
-        # ica.plot_components()
-         
-        #ica.plot_properties(epochs, picks=ica.exclude)s
-        else:
-            ica.fit(epochs)
-            
-            # ica.exclude = [0, 1, 2, 3, 4] 
-            # ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            #ica.plot_components()
+#whyyyyyyyyyyy??????
+#clean_raws = np.reshape(raw_lst, (len(lstPIds), 7))
+pws_lst = list()
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
+    # if pid != 5:
+    #     continue
+    for x in range(1,8):
+        #raw = clean_raws[n][x-1]
+        raw = raw_dict[str(pid)+'-'+ str(x)]
 
-            icas = [ica_template, ica]
-
-            for x, excl in enumerate(ica_exclude):
-                mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
-                ica.exclude = ica.labels_['exclude']
-
-            ica.apply(epochs)   
-            #ica.plot_sources(epochs)
-
-        # Average all epochs
-        evoked = epochs.average()     
-           
-        #Plot alpha and theta PSD
+        #plot alpha and theta 
         if(plot_plots):
-    
+            
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
 
-            epochs.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
-            epochs.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) #  .plot_topomap({'alpha': (8,12)},  normalize=True, axes=axes[1], show=False)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) 
         
             axs1 = subfigs[1].subplots(2, 1)
-            evoked.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
-            evoked.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -252,14 +204,15 @@ for pid in tqdm.tqdm(lstPIds):
 
       
         ### Compute the power spectral density (PSD)
-        group1 = epochs.copy().pick_channels(['F3', 'F4'])
-        group2 = epochs.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
-        group3 = epochs.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        raw_groups = [group1, group2, group3, epochs.copy()]
+        group1 = raw.copy().pick_channels(['F3', 'F4'])
+        group2 = raw.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
+        group3 = raw.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        for grp_nr, epochs in enumerate(raw_groups):
-            evoked = epochs.average() 
+        raw_groups = [group1, group2, group3, raw.copy()]
+        
+        for grp_nr, raw_group in enumerate(raw_groups):
+            raw = raw_group 
 
             picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
                     stim=False)
@@ -268,17 +221,15 @@ for pid in tqdm.tqdm(lstPIds):
     
             for m, method in enumerate(methods):
                 
-                spectrum = epochs.compute_psd(method = method, n_jobs=-1)
-                # average across epochs first
-                mean_spectrum = spectrum.average()
-                psds, freqs = mean_spectrum.get_data(return_freqs=True)
-        
-                # Normalize the PSDs ?
-                psds /= np.sum(psds, axis=-1, keepdims=True) 
+                spectrum = raw.compute_psd(method= method)
+                psds, freqs = spectrum.get_data(return_freqs=True)
                 
-                # #convert to DB
-                psdsDB = 10 * np.log10(psds)# erm lul wut
-
+                # Normalize the PSDs ?
+                psds /= np.sum(psds, axis=-1, keepdims=True)
+                
+                # convert to dB
+                #psds = 10 * np.log10(psds)
+                
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
@@ -305,18 +256,19 @@ for pid in tqdm.tqdm(lstPIds):
                 peak_theta = freqs[np.argmax(psds_mean[idx_theta])]
 
                 # Extract the power values from the detected peaks
-                # Plot the topographies across different frequency bands                         
+                # Plot the topographies across different frequency bands
+                
                 if(plot_plots):
 
                     fig, axes = plt.subplots(2, 2, figsize=(7, 3))
                     for ind, (label, band_def) in enumerate(bands):
+                        
+                        # Create a topomap for the current oscillation bandca
+                        raw.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
 
-                        # Create a topomap for the current oscillation band
-                        epochs.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', show_names=True, normalize=True, axes=axes[0, ind], show=False)
-                        
-                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
-                        
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
+                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
+
                         psds_std = (psds_mean[idx]).std(0)
                         peak = freqs[np.argmax(psds_mean[idx])]
                         axes[1,ind].plot(freqs[idx], psds_mean[idx], color='k')

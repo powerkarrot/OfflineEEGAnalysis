@@ -40,8 +40,6 @@ save_plots = False
 draw_plots = False
 
 # %%
-
-# %%
 # bad channels
 # TODO fill for all participants :')
 # Format: bads[pid][block]
@@ -83,6 +81,7 @@ try:
         ica_exclude = pickle.load(inp)
 except:
     ica_exclude = None
+    
 
 # %%
 pws_lst = list()
@@ -100,7 +99,10 @@ print(lstPIds)
 
 # %%
 
-for pid in tqdm.tqdm(lstPIds):
+clean_epochs = np.zeros((len(lstPIds), 7))
+epochs_lst = []
+
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     
     # if (pid != 1):
     #    continue
@@ -127,7 +129,6 @@ for pid in tqdm.tqdm(lstPIds):
     
 
     for x in range(1, 8):  
-        print("Block",x)
         
         # if(x > 1):
         #     break
@@ -176,7 +177,7 @@ for pid in tqdm.tqdm(lstPIds):
         #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
         reject = get_rejection_threshold(epochs, ch_types = 'eeg')
         reject['eeg'] = reject['eeg']
-        #print("The rejection dictionary is %s " %reject)
+        print("The rejection dictionary is %s " %reject)
         epochs.drop_bad(reject=reject)  
         #epochs.plot_drop_log()
         
@@ -225,6 +226,19 @@ for pid in tqdm.tqdm(lstPIds):
 
             ica.apply(epochs)   
             #ica.plot_sources(epochs)
+            
+        #clean_epochs.append(epochs)
+        epochs_lst.append(epochs)
+        #clean_epochs[n][x-1] = epochs
+
+clean_epochs = np.reshape(epochs_lst, (len(lstPIds), 7))
+
+#%%
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
+    
+    for x in range(1, 8):
+        
+        epochs = clean_epochs[n][x-1]
 
         # Average all epochs
         evoked = epochs.average()     

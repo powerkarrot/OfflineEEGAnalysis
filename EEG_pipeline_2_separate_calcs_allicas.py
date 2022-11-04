@@ -8,14 +8,12 @@ import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import seaborn as sns
-from autoreject import get_rejection_threshold
 
 # composite Simpson's rule
 from scipy.integrate import simpson
 
 # Import some NeuroDSP functions to use with MNE
 from neurodsp.spectral import trim_spectrum
-
 
 # FOOOF imports
 from fooof.bands import Bands
@@ -29,9 +27,13 @@ plt.rcParams.update({'figure.max_open_warning': 0})
 
 
 # %%
+NUM_BLOCKS = 7
+
 channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3','C3','P3','P4','C4','F4','Pz']]
 ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
 ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
+
+s_freqs = 300
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
@@ -39,11 +41,8 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 
-# %%
-
-# %%
 # bad channels
-# TODO fill for all participants :')
+# TODO fill for all participants and blocks :')
 # Format: bads[pid][block]
 # example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
 
@@ -73,19 +72,39 @@ bads = [[[], [], [], [], [], [],  []],
 
 # ICA template. 
 # import pickle if it exists else run script and create template
-try:
-    with open('./ica/pipeline_1/ica_template.pickle', 'rb') as inp:
-        ica_template = pickle.load(inp)
-except:
-    ica_template = None
-try:
-    with open('./ica/pipeline_1/exclude.pickle', 'rb') as inp:
-        ica_exclude = pickle.load(inp)
-except:
-    ica_exclude = None
+ica_templates = []
+ica_excludes = []
+
+count = 0
+dir_path = r'./ica/pipeline_2/'
+for path in os.scandir(dir_path):
+    if path.is_file():
+        count += 1
+count /= 2
+for f in range(int(count)):
+    try:
+        with open('./ica/pipeline_2/ica_template-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_template = pickle.load(inp)
+            ica_templates.append(ica_template)
+    except Exception as e:
+        print(e)
+        ica_template = None
+    try:
+        with open('./ica/pipeline_2/exclude-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_exclude = pickle.load(inp)
+            ica_excludes.append(ica_exclude)
+    except Exception as e:
+        print(e)
+        ica_exclude = None
+    
+#all ICAs to compute
+icas = []
+arr_raws = []
+icas_dict = {}
+raws_dict = {}
+clean_raws = {}
 
 # %%
-pws_lst = list()
 
 lstPIds = []
 path = "./Data/"
@@ -96,17 +115,20 @@ for filename in os.listdir(path):
         continue
 lstPIds = list(set(lstPIds))
 print(lstPIds)
+print(str(len(lstPIds)) + " subjects")
 
 
 # %%
 
+raw_lst = []
+raw_dict = {}
+
 for pid in tqdm.tqdm(lstPIds):
     
-    # if (pid != 1):
-    #    continue
-    # if (pid > 1):
+    # if (pid != 16):
+    #     continue
+    # if (pid > 2):
     #         break
-    print("pid:", pid)
 
     dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
     dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
@@ -124,13 +146,12 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll.fillna(method='ffill', inplace=True)
     dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
     dfAll = dfAll.dropna()
-    
+       
 
-    for x in range(1, 8):  
-        print("Block",x)
+    for x in range(1, NUM_BLOCKS+1):  
         
-        # if(x > 1):
-        #     break
+        # if(x > 2):
+        #     continue
         
         # Prepare data 
         # region
@@ -138,7 +159,7 @@ for pid in tqdm.tqdm(lstPIds):
         df = pd.DataFrame(data)
         # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-        sfreq=250
+        sfreq=300 # i really think its 300 -.-
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
         info.set_montage('standard_1020',  match_case=False)
 
@@ -147,102 +168,125 @@ for pid in tqdm.tqdm(lstPIds):
         raw = mne.io.RawArray(samples, info)
         raw.drop_channels(['Time', 'BlockNumber'])
         
-        # high pass filter to remove slow drifts, 70 Hz low pass
-        raw.filter(1., 70, None, fir_design='firwin')
-         
-        # remove power line interferance
+        #high pass filter to remove slow drifts, 70 Hz low pass
+        #raw.filter(1., 70., None, fir_design='firwin')
+        raw.filter(.1, 70, None, fir_design='firwin')
+
+        
+        #remove power line interferance
         raw.notch_filter(50, n_jobs=-1)
         
-        # set EEG reference
+        # set eeg reference
         raw.set_eeg_reference('average', projection=True)
-        #raw.set_eeg_reference(ref_channels=['Pz'])
         
         # Visual inspection of bad channels
-        # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
+         # TODO, empty list for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        #print("Bads are",  raw.info['bads'])
-        raw.interpolate_bads()
+        #raw.interpolate_bads()
         
-        #raw.plot(scalings='20e+4')
-        # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-        # raw.plot_psd()
-        
-        # Create equal length epochs of 4 seconds
-        epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)
-        #evoked.plot_joint(picks='eeg')
-        #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
-        
-        # Autoreject based on rejection threshold
-        #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
-        reject = get_rejection_threshold(epochs, ch_types = 'eeg')
-        reject['eeg'] = reject['eeg']
-        #print("The rejection dictionary is %s " %reject)
-        epochs.drop_bad(reject=reject)  
-        #epochs.plot_drop_log()
-        
-        
+        # # independent component analysis (ICA)        
+        ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
+        raw.load_data()
+        ica.fit(raw)
 
-        # independent component analysis (ICA)
-        # TODO
-        ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
-
-        epochs.load_data()
-
-        if ica_template == None:
-            ica.fit(epochs)
-            #ica.fit(epochs)
-            ica.plot_sources(epochs)
-            ica.plot_components()
+        # Pick templates
+        #TODO put this in separate script.
+        pick_ic_as_template = False
+        if(pick_ic_as_template):
             
-            with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
-                pickle.dump(ica, f)
-            with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
-                pickle.dump([0,1,2,3,4], f)
-            
-            #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            
-            #ica.save('./ica/template_1' + '/' + pid + '-ica.fif', overwrite=True)
+            ica.plot_sources(raw)
+            #exclude_ic = [0,1,2,3,4,5,6] # pid 2 block 1
+            #exclude_ic = [3] # pid 11 block 1
+            #exclude_ic = [1,2] # pid 14 block 1
+            exclude_ic = [] # pid 
+            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
+
+            ready_to_write = False # lol. change here i guess :D or i could just to a designated script. eventually.
+            if(ready_to_write):
+                # PID 2 block 1 atm
+                count = 0
+                dir_path = r'./ica/pipeline_2/'
+                for path in os.scandir(dir_path):
+                    if path.is_file():
+                        count += 1
+                count /= 2
+                
+                with open('./ica/pipeline_2/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
+                    pickle.dump(ica, f)
+                with open('./ica/pipeline_2/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
+                    pickle.dump(exclude_ic, f)
+                
+                ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
         
-        #if (template == None):
-            
-        # ica.fit(epochs)
-        # ica.plot_sources(epochs)
-        # ica.plot_components()
-         
-        #ica.plot_properties(epochs, picks=ica.exclude)s
-        else:
-            ica.fit(epochs)
-            
-            # ica.exclude = [0, 1, 2, 3, 4] 
-            # ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            #ica.plot_components()
+        # save the ICAs for the corrmap 
+        #else:
 
-            icas = [ica_template, ica]
+        icas.append(ica)
+        arr_raws.append(raw)
+        # icas_dict[str(pid)+'-'+str(x)] = ica
+        # raws_dict[str(pid)+'-'+str(x)] = raw
 
-            for x, excl in enumerate(ica_exclude):
-                mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
-                ica.exclude = ica.labels_['exclude']
+        # raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+        # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
+        #     pickle.dump(ica, f)
 
-            ica.apply(epochs)   
-            #ica.plot_sources(epochs)
 
-        # Average all epochs
-        evoked = epochs.average()     
-           
-        #Plot alpha and theta PSD
-        if(plot_plots):
+ #%%
+#clean_raws = np.zeros((2, 2),dtype=object)
+clean_raws = np.zeros((len(lstPIds), NUM_BLOCKS),dtype=object)
+
+for n, ic_templ in enumerate(ica_templates):
+    icas.insert(0,ic_templ) #first element of ica array is the template
+    for x, excl in enumerate(ica_excludes[n]):
+        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+    icas.pop(0) # remove template.
+
+
+for i, n in enumerate(icas):
+    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg')
+    n.exclude = n.labels_['exclude']
+    arr_raws[i] = n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
+
+# for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
+for i in range(len(lstPIds)):
+    for j in range(NUM_BLOCKS):
+        clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
+        
+# for i in range(2):
+#     for j in range(2):
+#         clean_raws[i][j] = arr_raws[j%2+i*2]        
+#whyyyyyyyyyyy??????
+#clean_raws = np.reshape(arr_raws, (len(lstPIds), NUM_BLOCKS))
+
+#raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+
+# %%        
+
+pws_lst = list()
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
+    # if pid != 1:
+    #     continue
+    # if (pid > 2):
+    #     break
     
+    for x in range(1,NUM_BLOCKS+1):
+        raw = clean_raws[n][x-1]
+        #raw = raw_dict[str(pid)+'-'+ str(x)]
+
+        #plot alpha and theta 
+        if(plot_plots):
+            
             fig = plt.figure( figsize=(7, 3))
             subfigs = fig.subfigures(1, 2, wspace=0.07, width_ratios=[3., 1.])
             axs0 = subfigs[0].subplots(2, 1)
             subfigs[0].set_facecolor('0.9')
 
-            epochs.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
-            epochs.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) #  .plot_topomap({'alpha': (8,12)},  normalize=True, axes=axes[1], show=False)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot(dB=False, axes = axs0[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot(dB = False, axes = axs0[0], show = False) 
         
             axs1 = subfigs[1].subplots(2, 1)
-            evoked.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
-            evoked.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
+            raw.compute_psd(method='multitaper', fmin=4, fmax = 8).plot_topo(dB = False, axes = axs1[0], show = False)
+            raw.compute_psd(method='multitaper', fmin=8, fmax = 12).plot_topo(dB = False, axes = axs1[1], show = False)
             
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
@@ -252,14 +296,15 @@ for pid in tqdm.tqdm(lstPIds):
 
       
         ### Compute the power spectral density (PSD)
-        group1 = epochs.copy().pick_channels(['F3', 'F4'])
-        group2 = epochs.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
-        group3 = epochs.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        raw_groups = [group1, group2, group3, epochs.copy()]
+        group1 = raw.copy().pick_channels(['F3', 'F4'])
+        group2 = raw.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
+        group3 = raw.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        for grp_nr, epochs in enumerate(raw_groups):
-            evoked = epochs.average() 
+        raw_groups = [group1, group2, group3, raw.copy()]
+        
+        for grp_nr, raw_group in enumerate(raw_groups):
+            raw = raw_group 
 
             picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
                     stim=False)
@@ -268,17 +313,15 @@ for pid in tqdm.tqdm(lstPIds):
     
             for m, method in enumerate(methods):
                 
-                spectrum = epochs.compute_psd(method = method, n_jobs=-1)
-                # average across epochs first
-                mean_spectrum = spectrum.average()
-                psds, freqs = mean_spectrum.get_data(return_freqs=True)
-        
-                # Normalize the PSDs ?
-                psds /= np.sum(psds, axis=-1, keepdims=True) 
+                spectrum = raw.compute_psd(method= method)
+                psds, freqs = spectrum.get_data(return_freqs=True)
                 
-                # #convert to DB
-                psdsDB = 10 * np.log10(psds)# erm lul wut
-
+                # Normalize the PSDs ?
+                psds /= np.sum(psds, axis=-1, keepdims=True)
+                
+                # convert to dB
+                #psds = 10 * np.log10(psds)
+                
                 #Mean of all channels
                 psds_mean = psds.mean(0)
             
@@ -305,18 +348,19 @@ for pid in tqdm.tqdm(lstPIds):
                 peak_theta = freqs[np.argmax(psds_mean[idx_theta])]
 
                 # Extract the power values from the detected peaks
-                # Plot the topographies across different frequency bands                         
+                # Plot the topographies across different frequency bands
+                
                 if(plot_plots):
 
                     fig, axes = plt.subplots(2, 2, figsize=(7, 3))
                     for ind, (label, band_def) in enumerate(bands):
+                        
+                        # Create a topomap for the current oscillation bandca
+                        raw.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
 
-                        # Create a topomap for the current oscillation band
-                        epochs.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', show_names=True, normalize=True, axes=axes[0, ind], show=False)
-                        
-                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
-                        
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
+                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
+
                         psds_std = (psds_mean[idx]).std(0)
                         peak = freqs[np.argmax(psds_mean[idx])]
                         axes[1,ind].plot(freqs[idx], psds_mean[idx], color='k')

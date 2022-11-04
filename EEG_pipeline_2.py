@@ -36,9 +36,9 @@ s_freqs = 300
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = True       
+plot_plots = False       
 save_plots = False
-draw_plots = True
+draw_plots = False
 
 # %%
 # bad channels
@@ -63,10 +63,12 @@ bads = [[[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []],
+        [[], [], [], [], [], [],  []]
 ]
 
 # %%
-pws_lst = list()
 
 lstPIds = []
 path = "./Data/"
@@ -80,11 +82,12 @@ print(lstPIds)
 
 
 # %%
+pws_lst = list()
 
 for pid in tqdm.tqdm(lstPIds):
     
-    if (pid != 5):
-        continue
+    # if (pid != 5):
+    #     continue
     # if (pid > 1):
     #         break
     print("pid:", pid)
@@ -107,7 +110,7 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.dropna()
        
 
-    for x in range(1, 2):  
+    for x in range(1, 8):  
         
         # if(x > 1):
         #     break
@@ -143,21 +146,21 @@ for pid in tqdm.tqdm(lstPIds):
         # Visual inspection of bad channels
          # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        print("Bads are",  raw.info['bads'])
-        raw.interpolate_bads()
+        #print("Bads are",  raw.info['bads'])
+        #raw.interpolate_bads()
         
         # # independent component analysis (ICA)
         # TODO Finish
         
-        ica = mne.preprocessing.ICA(method = "infomax", n_components=7, random_state=97, max_iter='auto')
-        ica.fit(raw)
-        # ica.plot_sources(raw)
-        ica.plot_components()
-        ica.exclude = [0, 2, 3, 4] 
+        # ica = mne.preprocessing.ICA(method = "infomax", n_components=7, random_state=97, max_iter='auto')
+        # ica.fit(raw)
+        # # ica.plot_sources(raw)
+        # ica.plot_components()
+        # ica.exclude = [0, 2, 3, 4] 
      
-        #ica.plot_properties(raw, picks=ica.exclude)
-        raw.load_data()
-        ica.apply(raw)     
+        # #ica.plot_properties(raw, picks=ica.exclude)
+        # raw.load_data()
+        # ica.apply(raw)     
         
         #plot alpha and theta 
         if(plot_plots):

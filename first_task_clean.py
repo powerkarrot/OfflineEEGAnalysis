@@ -39,7 +39,6 @@ save_plots = False
 draw_plots = True
 
 # %%
-pws_lst = list()
 
 lstPIds = []
 path = "./Data/"
@@ -57,7 +56,7 @@ def normalize(values, actual_bounds, desired_bounds):
     return [desired_bounds[0] + (x - actual_bounds[0]) * (desired_bounds[1] - desired_bounds[0]) / (actual_bounds[1] - actual_bounds[0]) for x in values]
 
 # %%
-
+pws_lst = list()
 for pid in tqdm.tqdm(lstPIds):
     
     if (pid != 5):

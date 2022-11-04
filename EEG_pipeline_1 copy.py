@@ -39,6 +39,7 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 
+
 # %%
 
 # %%
@@ -83,6 +84,10 @@ try:
         ica_exclude = pickle.load(inp)
 except:
     ica_exclude = None
+    
+# alle ICAs to compute
+icas = []
+arr_epochs = []
 
 # %%
 pws_lst = list()
@@ -96,6 +101,7 @@ for filename in os.listdir(path):
         continue
 lstPIds = list(set(lstPIds))
 print(lstPIds)
+print(str(len(lstPIds)) + "subjects")
 
 
 # %%
@@ -104,7 +110,7 @@ for pid in tqdm.tqdm(lstPIds):
     
     # if (pid != 1):
     #    continue
-    # if (pid > 1):
+    # if (pid > 2):
     #         break
     print("pid:", pid)
 
@@ -124,10 +130,8 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll.fillna(method='ffill', inplace=True)
     dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
     dfAll = dfAll.dropna()
-    
 
     for x in range(1, 8):  
-        print("Block",x)
         
         # if(x > 1):
         #     break
@@ -160,7 +164,7 @@ for pid in tqdm.tqdm(lstPIds):
         # Visual inspection of bad channels
         # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        #print("Bads are",  raw.info['bads'])
+        print("Bads are",  raw.info['bads'])
         raw.interpolate_bads()
         
         #raw.plot(scalings='20e+4')
@@ -176,56 +180,81 @@ for pid in tqdm.tqdm(lstPIds):
         #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
         reject = get_rejection_threshold(epochs, ch_types = 'eeg')
         reject['eeg'] = reject['eeg']
-        #print("The rejection dictionary is %s " %reject)
+        print("The rejection dictionary is %s " %reject)
         epochs.drop_bad(reject=reject)  
         #epochs.plot_drop_log()
         
-        
-
         # independent component analysis (ICA)
-        # TODO
         ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
 
         epochs.load_data()
 
+        # Pick a template
         if ica_template == None:
             ica.fit(epochs)
             #ica.fit(epochs)
             ica.plot_sources(epochs)
             ica.plot_components()
             
-            with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
-                pickle.dump(ica, f)
-            with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
-                pickle.dump([0,1,2,3,4], f)
+            #TODO allow for more ICAs
+            pick_ic_as_template = False
+            if(pick_ic_as_template): # PID 5 block 1 atm
+                
+                with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
+                    pickle.dump(ica, f)
+                with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
+                    pickle.dump([0,1,2,3,4], f)
+                #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
             
-            #ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            
-            #ica.save('./ica/template_1' + '/' + pid + '-ica.fif', overwrite=True)
+        #ica.plot_properties(epochs, picks=ica.exclude)
         
-        #if (template == None):
-            
-        # ica.fit(epochs)
-        # ica.plot_sources(epochs)
-        # ica.plot_components()
-         
-        #ica.plot_properties(epochs, picks=ica.exclude)s
+        # save the ICAs for the corrmap 
         else:
             ica.fit(epochs)
-            
-            # ica.exclude = [0, 1, 2, 3, 4] 
-            # ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-            #ica.plot_components()
 
-            icas = [ica_template, ica]
+            icas.append(ica)
+            arr_epochs.append(epochs)
 
-            for x, excl in enumerate(ica_exclude):
-                mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
-                ica.exclude = ica.labels_['exclude']
+            # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+            # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
+            #     pickle.dump(ica, f)
+    
+ #%%
+ 
+    #ica.fit(epochs, reject = reject)
+clean_epochs = np.zeros((len(lstPIds), 7))
 
-            ica.apply(epochs)   
-            #ica.plot_sources(epochs)
+# ica.exclude = [0, 1, 2, 3, 4] 
+# ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
 
+for x, excl in enumerate(ica_exclude):
+    icas_labeled = mne.preprocessing.corrmap(icas, [0,excl], label='exclude')
+
+for i, n in enumerate(icas):
+    n.exclude = ica.labels_['exclude']
+    #ica.fit(arr_epochs[i]) do i need to do this again...???? AAARRGHHHH i dont knooow 
+    ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices
+
+
+clean_epochs = np.reshape(arr_epochs, (len(lstPIds),7))
+#clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
+
+#raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+    
+
+#%%
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
+    # if (pid > 2):
+    #         break
+    for x in range(1, 8):  
+        #epoch = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+        
+        #epochs = clean_epochs[pid-1][x-1] # this still needs to be fixed. 
+        epochs = clean_epochs[n][x-1] # this still needs to be fixed. 
+
+        #print("Cur index", ((x-1)*len(lstPIds)) + pid)
+        #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
+        
         # Average all epochs
         evoked = epochs.average()     
            
