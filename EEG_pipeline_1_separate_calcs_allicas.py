@@ -77,16 +77,30 @@ bads = [[[], [], [], [], [], [],  []],
 
 # ICA template. 
 # import pickle if it exists else run script and create template
-try:
-    with open('./ica/pipeline_1/ica_template.pickle', 'rb') as inp:
-        ica_template = pickle.load(inp)
-except:
-    ica_template = None
-try:
-    with open('./ica/pipeline_1/exclude.pickle', 'rb') as inp:
-        ica_exclude = pickle.load(inp)
-except:
-    ica_exclude = None
+ica_templates = []
+ica_excludes = []
+
+count = 0
+dir_path = r'./ica/pipeline_1/'
+for path in os.scandir(dir_path):
+    if path.is_file():
+        count += 1
+count /= 2
+for f in range(int(count)):
+    try:
+        with open('./ica/pipeline_1/ica_template-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_template = pickle.load(inp)
+            ica_templates.append(ica_template)
+    except Exception as e:
+        print(e)
+        ica_template = None
+    try:
+        with open('./ica/pipeline_1/exclude-' + str(int(f)) + '.pickle', 'rb') as inp:
+            ica_exclude = pickle.load(inp)
+            ica_excludes.append(ica_exclude)
+    except Exception as e:
+        print(e)
+        ica_exclude = None
     
 # all ICAs to compute
 icas = []
@@ -184,57 +198,67 @@ for pid in tqdm.tqdm(lstPIds):
         reject['eeg'] = reject['eeg']
         print("The rejection dictionary is %s " %reject)
         epochs.drop_bad(reject=reject)  
-        epochs.plot_drop_log()
+        # epochs.plot_drop_log()
         
         # independent component analysis (ICA)
         ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
 
         epochs.load_data()
+        ica.fit(epochs)
+        #ica.fit(epochs, reject=reject)
 
-        # Pick a template
-        if ica_template == None:
-            ica.fit(epochs)
+
+        # Pick templates
+        #TODO put this in separate script.
+        pick_ic_as_template = False
+        if(pick_ic_as_template):
             #ica.fit(epochs)
             ica.plot_sources(epochs)
-            ica.plot_components()
-            exclude_ic = [0, 1, 2, 3, 4]
+            #ica.plot_components()
+            exclude_ic = [0, 1, 2, 3, 4] # pid 5 block 1
             #ica.plot_properties(epochs, picks=ica.exclude)
             ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg')
 
             #TODO allow for more ICAs
-            pick_ic_as_template = False
-            if(pick_ic_as_template): # PID 5 block 1 atm
+            ready_to_write = False 
+            if(ready_to_write):
+                # PID 2 block 1 atm
+                count = 0
+                dir_path = r'./ica/pipeline_1/'
+                for path in os.scandir(dir_path):
+                    if path.is_file():
+                        count += 1
+                count /= 2
                 
-                with open('./ica/pipeline_1/ica_template.pickle', 'wb') as f:
+                with open('./ica/pipeline_1/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(ica, f)
-                with open('./ica/pipeline_1/exclude.pickle', 'wb') as f:
+                with open('./ica/pipeline_1/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(exclude_ic, f)
+                
+                #ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
             
-        
-        # save the ICAs for the corrmap 
-        else:
-            ica.fit(epochs)
 
-            icas.append(ica)
-            arr_epochs.append(epochs)
+        # save the ICAs for the corrmap 
+        icas.append(ica)
+        arr_epochs.append(epochs)
 
             # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
  #%%
  
-    #ica.fit(epochs, reject = reject)
 clean_epochs = np.zeros((len(lstPIds), NUM_BLOCKS)) # remove
 
-# ica.exclude = [0, 1, 2, 3, 4] 
-# ica.plot_overlay(epochs.average(), exclude=[0, 1, 2, 3, 4], picks='eeg')
-
-for x, excl in enumerate(ica_exclude):
-    mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+for n, ic_templ in enumerate(ica_templates):
+    icas.insert(0,ic_templ) #first element of ica array is the template
+    for x, excl in enumerate(ica_excludes[n]):
+        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+    icas.pop(0) # remove template.
 
 for i, n in enumerate(icas):
     n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg')
     n.exclude = n.labels_['exclude']
-    n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices
+    # apparently this returns None??
+    arr_epochs[i] = n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
