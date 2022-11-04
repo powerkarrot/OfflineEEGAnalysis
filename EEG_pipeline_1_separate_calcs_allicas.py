@@ -85,7 +85,7 @@ try:
 except:
     ica_exclude = None
     
-# alle ICAs to compute
+# all ICAs to compute
 icas = []
 arr_epochs = []
 
@@ -101,7 +101,7 @@ for filename in os.listdir(path):
         continue
 lstPIds = list(set(lstPIds))
 print(lstPIds)
-print(str(len(lstPIds)) + "subjects")
+print(str(len(lstPIds)) + " subjects")
 
 
 # %%
@@ -164,7 +164,6 @@ for pid in tqdm.tqdm(lstPIds):
         # Visual inspection of bad channels
         # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
         raw.info['bads'] =  bads[pid-1][x-1]
-        print("Bads are",  raw.info['bads'])
         raw.interpolate_bads()
         
         #raw.plot(scalings='20e+4')
@@ -232,7 +231,6 @@ for x, excl in enumerate(ica_exclude):
 
 for i, n in enumerate(icas):
     n.exclude = ica.labels_['exclude']
-    #ica.fit(arr_epochs[i]) do i need to do this again...???? AAARRGHHHH i dont knooow 
     ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices
 
 
