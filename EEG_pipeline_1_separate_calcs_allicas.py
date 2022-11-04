@@ -188,7 +188,7 @@ for pid in tqdm.tqdm(lstPIds):
         # raw.plot_psd()
         
         # Create equal length epochs of 4 seconds
-        epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)``
+        epochs = mne.make_fixed_length_epochs(raw.copy(), preload=False, duration = 4)
         #evoked.plot_joint(picks='eeg')
         #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
         
