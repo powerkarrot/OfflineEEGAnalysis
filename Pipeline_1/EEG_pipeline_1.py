@@ -281,6 +281,7 @@ for pid in tqdm.tqdm(lstPIds):
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
 #TODO just add epochs next to icas append -.-
+#altho this is better for testing, reloads fresh epochs without ICA
 if len(arr_epochs) < 1:
     print("ok")
     for pid in tqdm.tqdm(lstPIds):
