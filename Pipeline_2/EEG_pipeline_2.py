@@ -77,7 +77,6 @@ ica_templates = []
 ica_excludes = []
 
 Path('./ica/').mkdir(parents=True, exist_ok=True)
-Path('./Fifs/').mkdir(parents=True, exist_ok=True)
 
 count = 0
 dir_path = r'./ica/'
@@ -125,69 +124,81 @@ print(str(len(lstPIds)) + " subjects")
 # %%
 
 raw_lst = []
-raw_dict = {}
+#raw_dict = {}
 
+dir_path = r'./fifs/'
+Path(dir_path).mkdir(parents=True, exist_ok=True)
+
+if os.listdir != NUM_BLOCKS * len(lstPIds):
+    for pid in tqdm.tqdm(lstPIds):
+
+        # if (pid != 16):
+        #     continue
+        # if (pid > 2):
+        #         break
+
+        dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
+        dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
+            
+        dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
+        dfEEG = dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"})
+        dfEEG.drop("TimeLsl", axis =1, inplace=True)
+
+        dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
+
+        dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
+        dfAll = dfAll.sort_values(by="Time") # inplace?
+
+        dfAll = dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"] )
+        dfAll.fillna(method='ffill', inplace=True)
+        dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
+        dfAll = dfAll.dropna()
+            
+
+        for x in range(1, NUM_BLOCKS+1):  
+            
+            # if(x > 2):
+            #     continue
+            
+            # Prepare data 
+            # region
+            data = dfAll.loc[dfAll['BlockNumber'] == x]
+            df = pd.DataFrame(data)
+            # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
+
+            sfreq=300 # i really think its 300 -.-
+            info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
+            info.set_montage('standard_1020',  match_case=False)
+
+            samples = df.T
+            
+            raw = mne.io.RawArray(samples, info)
+            raw.drop_channels(['Time', 'BlockNumber'])
+            
+            #high pass filter to remove slow drifts, 70 Hz low pass
+            #raw.filter(1., 70., None, fir_design='firwin')
+            raw.filter(.1, 70, None, fir_design='firwin')
+
+            #remove power line interferance
+            raw.notch_filter(50, n_jobs=-1)
+            
+            # set eeg reference
+            raw.set_eeg_reference('average', projection=True)
+            
+            # Visual inspection of bad channels
+            # TODO, empty list for now. With new setup, check for bad channels only once for all blocks.
+            raw.info['bads'] =  bads[pid-1][x-1]
+            raw.interpolate_bads()
+            
+            raw.save('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', overwrite = False)
+
+
+# %%
 for pid in tqdm.tqdm(lstPIds):
-    
-    # if (pid != 16):
-    #     continue
-    # if (pid > 2):
-    #         break
-
-    dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
-    dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
-        
-    dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
-    dfEEG = dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"})
-    dfEEG.drop("TimeLsl", axis =1, inplace=True)
-
-    dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
-    
-    dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")#.fillna(method='ffill')
-    dfAll = dfAll.sort_values(by="Time") # inplace?
-    
-    dfAll = dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"] )
-    dfAll.fillna(method='ffill', inplace=True)
-    dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
-    dfAll = dfAll.dropna()
-       
-
     for x in range(1, NUM_BLOCKS+1):  
         
-        # if(x > 2):
-        #     continue
-        
-        # Prepare data 
-        # region
-        data = dfAll.loc[dfAll['BlockNumber'] == x]
-        df = pd.DataFrame(data)
-        # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
-
-        sfreq=300 # i really think its 300 -.-
-        info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
-        info.set_montage('standard_1020',  match_case=False)
-
-        samples = df.T
-        
-        raw = mne.io.RawArray(samples, info)
-        raw.drop_channels(['Time', 'BlockNumber'])
-        
-        #high pass filter to remove slow drifts, 70 Hz low pass
-        #raw.filter(1., 70., None, fir_design='firwin')
-        raw.filter(.1, 70, None, fir_design='firwin')
-
-        
-        #remove power line interferance
-        raw.notch_filter(50, n_jobs=-1)
-        
-        # set eeg reference
-        raw.set_eeg_reference('average', projection=True)
-        
-        # Visual inspection of bad channels
-         # TODO, empty list for now. With new setup, check for bad channels only once for all blocks.
-        raw.info['bads'] =  bads[pid-1][x-1]
-        #raw.interpolate_bads()
-        
+        raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif')
+          
         # # independent component analysis (ICA)        
         ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
         raw.load_data()
@@ -227,12 +238,8 @@ for pid in tqdm.tqdm(lstPIds):
 
         icas.append(ica)
         arr_raws.append(raw)
-        # icas_dict[str(pid)+'-'+str(x)] = ica
-        # raws_dict[str(pid)+'-'+str(x)] = raw
 
         # raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
-        # with open('./ica/pipeline_1/icas/'+str(pid)+'_'+str(x)+'.pickle', 'wb') as f:
-        #     pickle.dump(ica, f)
 
 
  #%%
@@ -256,12 +263,6 @@ for i in range(len(lstPIds)):
     for j in range(NUM_BLOCKS):
         clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
         
-# for i in range(2):
-#     for j in range(2):
-#         clean_raws[i][j] = arr_raws[j%2+i*2]        
-#whyyyyyyyyyyy??????
-#clean_raws = np.reshape(arr_raws, (len(lstPIds), NUM_BLOCKS))
-
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
 
 # %%        
@@ -390,7 +391,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 # %%
 
 f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
-dfPowers  = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'AlphaPow', 'DeltaPow', 'AlphaTheta', 'Group', 'Method'])
+dfPowers = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'AlphaPow', 'DeltaPow', 'AlphaTheta', 'Group', 'Method'])
 ys = ['AlphaPow', 'DeltaPow', 'AlphaTheta']
 
 for y in range(4):
