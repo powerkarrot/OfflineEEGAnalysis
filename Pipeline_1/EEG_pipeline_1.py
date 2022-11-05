@@ -127,7 +127,6 @@ print(str(len(lstPIds)) + " subjects")
 dir_path = r'./fifs'
 Path('./fifs').mkdir(parents=True, exist_ok=True)
 
-pws_lst = list()
 arr_epochs = []
 
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
@@ -210,13 +209,13 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             epochs.drop_bad(reject=reject)  
             #epochs.plot_drop_log()
             
-            arr_epochs.append(epochs)
+            #arr_epochs.append(epochs)
             epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
 
 
 # %%
-exclude_ic = []
+exclude_ic = [] # TODO sure its here?
 pick_ic_as_template = True
 action = None
 
@@ -248,7 +247,7 @@ for pid in tqdm.tqdm(lstPIds):
             #ica.plot_properties(epochs, picks=ica.exclude)
             
             ica.plot_sources(epochs, block = True)
-            print(ica.exclude)
+            
             exclude_ic = ica.exclude
             ica.exclude = [] # avoid excluding it twice
             
@@ -256,7 +255,6 @@ for pid in tqdm.tqdm(lstPIds):
 
             ready_to_write = True 
             if(ready_to_write):
-                # PID 2 block 1 atm
                 count = 0
                 dir_path = r'./ica/'
                 for path in os.scandir(dir_path):
@@ -269,18 +267,20 @@ for pid in tqdm.tqdm(lstPIds):
                 with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(exclude_ic, f)
                     
+                #TODO maybe do a size check before appending    
                 ica_templates.append(ica)
                 ica_excludes.append(exclude_ic)
                             
         # save the ICAs for the corrmap 
         icas.append(ica)
-    
+        #arr_epochs.append(epochs)
         # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
  #%%
  
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
+#TODO just add epochs next to icas append -.-
 if len(arr_epochs) < 1:
     print("ok")
     for pid in tqdm.tqdm(lstPIds):
@@ -318,6 +318,8 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
     
 
 #%%
+pws_lst = list()
+
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     # if (pid > 2):
     #         break
