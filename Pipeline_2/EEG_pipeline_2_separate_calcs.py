@@ -71,7 +71,7 @@ bads = [[[], [], [], [], [], [],  []],
 # %%
 
 lstPIds = []
-path = "./Data/"
+path = "../Data/"
 for filename in os.listdir(path):
     if filename.endswith(".csv"): 
         lstPIds.append(int(filename.split("-")[0].replace("ID", "")))
