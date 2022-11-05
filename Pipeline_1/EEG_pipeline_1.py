@@ -1,7 +1,7 @@
 # %%
+import os
 import numpy as np
 import mne
-from mne.time_frequency import psd_multitaper, psd_welch
 import pandas as pd
 import pickle
 import tqdm 
@@ -20,7 +20,6 @@ from neurodsp.spectral import trim_spectrum
 # FOOOF imports
 from fooof.bands import Bands
 
-import os
 
 # %%
 mne.set_log_level(False)
@@ -106,10 +105,10 @@ for f in range(int(count)):
     
 # all ICAs to compute
 icas = []
-arr_epochs = []
 
 # %%
-pws_lst = list()
+
+
 
 lstPIds = []
 path = "../Data/"
@@ -125,10 +124,13 @@ print(str(len(lstPIds)) + " subjects")
 
 # %%
 
-dir_path = r'./fifs/'
-Path(dir_path).mkdir(parents=True, exist_ok=True)
+dir_path = r'./fifs'
+Path('./fifs').mkdir(parents=True, exist_ok=True)
 
-if os.listdir != NUM_BLOCKS * len(lstPIds):
+pws_lst = list()
+arr_epochs = []
+
+if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
         
@@ -188,7 +190,8 @@ if os.listdir != NUM_BLOCKS * len(lstPIds):
             # Visual inspection of bad channels
             # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
             raw.info['bads'] =  bads[pid-1][x-1]
-            raw.interpolate_bads()
+            if raw.info['bads']:
+                raw.interpolate_bads()
             
             #raw.plot(scalings='20e+4')
             # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
@@ -205,14 +208,27 @@ if os.listdir != NUM_BLOCKS * len(lstPIds):
             reject['eeg'] = reject['eeg']
             print("The rejection dictionary is %s " %reject)
             epochs.drop_bad(reject=reject)  
-            epochs.plot_drop_log()
+            #epochs.plot_drop_log()
             
+            arr_epochs.append(epochs)
             epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
 
 
 # %%
+exclude_ic = []
+pick_ic_as_template = True
+action = None
+
 for pid in tqdm.tqdm(lstPIds):
+
+    if action == 'no':
+        pick_ic_as_template = False
+    else:
+        action = input("Select ICs for ICE corrmap? - ENTER | no")
+        if action == 'no':
+            pick_ic_as_template = False
+                
     for x in range(1, NUM_BLOCKS+1):  
         
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif')
@@ -224,20 +240,21 @@ for pid in tqdm.tqdm(lstPIds):
         ica.fit(epochs)
         #ica.fit(epochs, reject=reject)
 
-
         # Pick templates
         #TODO put this in separate script.
-        pick_ic_as_template = False
         if(pick_ic_as_template):
-            #ica.fit(epochs)
-            ica.plot_sources(epochs)
+ 
             #ica.plot_components()
-            exclude_ic = [0, 1, 2, 3, 4] # pid 5 block 1
             #ica.plot_properties(epochs, picks=ica.exclude)
+            
+            ica.plot_sources(epochs, block = True)
+            print(ica.exclude)
+            exclude_ic = ica.exclude
+            ica.exclude = [] # avoid excluding it twice
+            
             ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg')
 
-            #TODO allow for more ICAs
-            ready_to_write = False 
+            ready_to_write = True 
             if(ready_to_write):
                 # PID 2 block 1 atm
                 count = 0
@@ -251,31 +268,46 @@ for pid in tqdm.tqdm(lstPIds):
                     pickle.dump(ica, f)
                 with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(exclude_ic, f)
-                
-                #ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
-            
-
+                    
+                ica_templates.append(ica)
+                ica_excludes.append(exclude_ic)
+                            
         # save the ICAs for the corrmap 
         icas.append(ica)
-        arr_epochs.append(epochs)
-
+    
         # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
  #%%
  
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
+if len(arr_epochs) < 1:
+    print("ok")
+    for pid in tqdm.tqdm(lstPIds):
+        for x in range(1, NUM_BLOCKS+1): 
+            arr_epochs.append(mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif'))
+            
 for n, ic_templ in enumerate(ica_templates):
-    icas.insert(0,ic_templ) #first element of ica array is the template
+    icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_excludes[n]):
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
     icas.pop(0) # remove template.
-
+    
+p = 0
+b = 0
 for i, n in enumerate(icas):
-    n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg')
-    n.exclude = n.labels_['exclude']
-    # apparently this returns None??
-    arr_epochs[i] = n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+    b += 1
+    if i % 7 == 0:
+        p += 1
+    if b == 8:
+        b = 1
+    try:
+        n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("Pid "+ str(p) +" block " +str(b)) )
+        n.exclude = n.labels_['exclude'] # do i need to do this again..? - i think so? plot overlay still plots ist
+        # apparently this returns None??
+        arr_epochs[i] = n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+    except Exception as e:
+        print("No ICs to exclude: \n", e)
 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
@@ -347,7 +379,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 psds /= np.sum(psds, axis=-1, keepdims=True) 
                 
                 # #convert to DB
-                psdsDB = 10 * np.log10(psds)# erm lul wut
+                psdsDB = 10 * np.log10(psds)
 
                 #Mean of all channels
                 psds_mean = psds.mean(0)
