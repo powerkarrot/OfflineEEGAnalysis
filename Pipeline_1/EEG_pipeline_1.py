@@ -10,6 +10,7 @@ from matplotlib import cm
 import seaborn as sns
 from autoreject import get_rejection_threshold
 from pathlib import Path
+from itertools import chain, repeat
 
 # composite Simpson's rule
 from scipy.integrate import simpson
@@ -225,7 +226,13 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        action = input("Select ICs for ICE corrmap? - ENTER | no")
+        valid_response = {'no'} 
+        prompts = chain(["Select ICs for ICE corrmap? - ENTER | no"], repeat("Type ENTER or \"no\": "))
+        replies = map(input, prompts)
+        lowercased_replies = map(str.lower, replies)
+        stripped_replies = map(str.strip, lowercased_replies)
+        action = next(filter(valid_response.__contains__, stripped_replies))
+        #action = input("Select ICs for ICE corrmap? - ENTER | no")
         if action == 'no':
             pick_ic_as_template = False
                 
