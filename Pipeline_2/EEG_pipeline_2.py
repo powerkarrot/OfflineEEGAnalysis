@@ -102,13 +102,11 @@ for f in range(int(count)):
     
 #all ICAs to compute
 icas = []
-arr_raws = []
 icas_dict = {}
 raws_dict = {}
 clean_raws = {}
 
 # %%
-
 lstPIds = []
 path = "../Data/"
 for filename in os.listdir(path):
@@ -122,14 +120,12 @@ print(str(len(lstPIds)) + " subjects")
 
 
 # %%
-
-raw_lst = []
-#raw_dict = {}
+arr_raws = []
 
 dir_path = r'./fifs/'
 Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-if os.listdir != NUM_BLOCKS * len(lstPIds):
+if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
 
         # if (pid != 16):
@@ -177,6 +173,7 @@ if os.listdir != NUM_BLOCKS * len(lstPIds):
             
             #high pass filter to remove slow drifts, 70 Hz low pass
             #raw.filter(1., 70., None, fir_design='firwin')
+            #TODO im using .1 not 1.?
             raw.filter(.1, 70, None, fir_design='firwin')
 
             #remove power line interferance
@@ -190,35 +187,48 @@ if os.listdir != NUM_BLOCKS * len(lstPIds):
             raw.info['bads'] =  bads[pid-1][x-1]
             raw.interpolate_bads()
             
+            #arr_raws.append(raw)
             raw.save('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', overwrite = False)
 
 
 # %%
+
+exclude_ic = [] # TODO sure its here?
+pick_ic_as_template = True
+action = None
+
 for pid in tqdm.tqdm(lstPIds):
+    
+    if action == 'no':
+        pick_ic_as_template = False
+    else:
+        action = input("Select ICs for ICE corrmap? - ENTER | no")
+        if action == 'no':
+            pick_ic_as_template = False
+    
     for x in range(1, NUM_BLOCKS+1):  
         
         raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif')
           
         # # independent component analysis (ICA)        
         ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
+        
         raw.load_data()
         ica.fit(raw)
 
         # Pick templates
         #TODO put this in separate script.
-        pick_ic_as_template = False
         if(pick_ic_as_template):
             
-            ica.plot_sources(raw)
-            #exclude_ic = [0,1,2,3,4,5,6] # pid 2 block 1
-            #exclude_ic = [3] # pid 11 block 1
-            #exclude_ic = [1,2] # pid 14 block 1
-            exclude_ic = [] # pid 
+            ica.plot_sources(raw, block = True)
+            
+            exclude_ic = ica.exclude
+            ica.exclude = [] # avoid excluding it twice
+            
             ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
 
-            ready_to_write = False # lol. change here i guess :D or i could just to a designated script. eventually.
+            ready_to_write = True 
             if(ready_to_write):
-                # PID 2 block 1 atm
                 count = 0
                 dir_path = r'./ica/'
                 for path in os.scandir(dir_path):
@@ -231,7 +241,9 @@ for pid in tqdm.tqdm(lstPIds):
                 with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
                     pickle.dump(exclude_ic, f)
                 
-                ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
+                #TODO maybe do a size check before appending    
+                ica_templates.append(ica)
+                ica_excludes.append(exclude_ic)
         
         # save the ICAs for the corrmap 
         #else:
@@ -252,9 +264,16 @@ for n, ic_templ in enumerate(ica_templates):
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
     icas.pop(0) # remove template.
 
-
+p = 0
+b = 0
 for i, n in enumerate(icas):
-    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg')
+    #TODO turn this into oneliner
+    b += 1
+    if i % 7 == 0:
+        p += 1
+    if b == 8:
+        b = 1
+    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
     n.exclude = n.labels_['exclude']
     arr_raws[i] = n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
