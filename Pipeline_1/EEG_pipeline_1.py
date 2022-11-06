@@ -121,7 +121,6 @@ lstPIds = list(set(lstPIds))
 print(lstPIds)
 print(str(len(lstPIds)) + " subjects")
 
-
 # %%
 
 dir_path = r'./fifs'
@@ -224,7 +223,7 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        valid_response = {'no'} 
+        valid_response = {'no', 'yes'} 
         prompts = chain(["Select ICs for ICE corrmap? - ENTER | no"], repeat("Type ENTER or \"no\": "))
         replies = map(input, prompts)
         lowercased_replies = map(str.lower, replies)
@@ -295,12 +294,12 @@ clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 #TODO just add epochs next to icas append -.-
 #altho this is better for testing, reloads fresh epochs without ICA
 if len(arr_epochs) < 1:
-    print("ok")
     for pid in tqdm.tqdm(lstPIds):
         for x in range(1, NUM_BLOCKS+1): 
             arr_epochs.append(mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif'))
             
 for n, ic_templ in enumerate(ica_templates):
+
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_excludes[n]):
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)

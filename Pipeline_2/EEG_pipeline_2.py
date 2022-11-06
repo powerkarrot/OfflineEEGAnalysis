@@ -203,7 +203,7 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        valid_response = {'no'} 
+        valid_response = {'no', 'yes'} 
         prompts = chain(["Select ICs for ICE corrmap? - ENTER | no"], repeat("Type ENTER or \"no\": "))
         replies = map(input, prompts)
         lowercased_replies = map(str.lower, replies)
@@ -244,9 +244,9 @@ for pid in tqdm.tqdm(lstPIds):
             ica.plot_sources(raw, block = True)
             
             exclude_ic = ica.exclude
-            ica.exclude = [] # avoid excluding it twice
+            #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
             
-            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg')
+            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360.)
 
             ready_to_write = True 
             if(ready_to_write):
@@ -292,7 +292,7 @@ for i, n in enumerate(icas):
     p = p + 1 if i % 7 == 0 else p
     b = 1 if  b == 8 else b
 
-    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
+    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
     n.exclude = n.labels_['exclude']
     n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
