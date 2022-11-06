@@ -18,16 +18,17 @@ while not done:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif') 
             ica.plot_sources(epochs, block = True)
             exclude_ic = ica.exclude
-            ica.exclude = [] # avoid excluding it twice
+            #ica.exclude = [] # avoid excluding it twice
             
-            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg')
+            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
             
             while True:
                 accept = input("Accept? - yes | esc")
                 try:
                     if accept == 'yes':
                         exclude_ic = ica.exclude
-                        ica.exclude = [] # avoid excluding it twice
+                        #ica.exclude = [] # avoid excluding it twice
+                        ica.save('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif', overwrite = True)
                         count = 0
                         dir_path = r'./ica/'
                         for path in os.scandir(dir_path):
