@@ -110,8 +110,6 @@ icas = []
 
 # %%
 
-
-
 lstPIds = []
 path = "../Data/"
 for filename in os.listdir(path):
@@ -232,7 +230,6 @@ for pid in tqdm.tqdm(lstPIds):
         lowercased_replies = map(str.lower, replies)
         stripped_replies = map(str.strip, lowercased_replies)
         action = next(filter(valid_response.__contains__, stripped_replies))
-        #action = input("Select ICs for ICE corrmap? - ENTER | no")
         if action == 'no':
             pick_ic_as_template = False
                 
@@ -247,12 +244,12 @@ for pid in tqdm.tqdm(lstPIds):
 
             epochs.load_data()
             ica.fit(epochs)
+            #ica.fit(epochs, reject=reject) # to reject or not reject, that is the question
             
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-        #ica.fit(epochs, reject=reject)
 
         # Pick templates
         #TODO put this in separate script.
@@ -328,7 +325,7 @@ for i, n in enumerate(icas):
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
-#TODO consider saving finished epochs 
+# TODO save preprocessed epochs        
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
 #%%

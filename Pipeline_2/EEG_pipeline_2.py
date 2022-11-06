@@ -159,7 +159,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             #     continue
             
             # Prepare data 
-            # region
             data = dfAll.loc[dfAll['BlockNumber'] == x]
             df = pd.DataFrame(data)
             # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
@@ -225,7 +224,7 @@ for pid in tqdm.tqdm(lstPIds):
         raw.load_data()
         
         
-         # should probably delete contents first but hey
+        # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             # independent component analysis (ICA)
             ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
@@ -237,7 +236,6 @@ for pid in tqdm.tqdm(lstPIds):
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-        #ica.fit(epochs, reject=reject)
 
         # Pick templates
         #TODO put this in separate script.
@@ -290,7 +288,6 @@ for n, ic_templ in enumerate(ica_templates):
 p = 0
 b = 0
 for i, n in enumerate(icas):
-    #TODO turn this into oneliner
     b += 1
     p = p + 1 if i % 7 == 0 else p
     b = 1 if  b == 8 else b
@@ -303,7 +300,8 @@ for i, n in enumerate(icas):
 for i in range(len(lstPIds)):
     for j in range(NUM_BLOCKS):
         clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
-        
+
+# TODO save preprocessed raws        
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
 
 # %%        
