@@ -80,6 +80,7 @@ ica_templates = []
 ica_excludes = []
 
 Path('./ica/').mkdir(parents=True, exist_ok=True)
+Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 count = 0
 dir_path = r'./ica/'
@@ -232,11 +233,18 @@ for pid in tqdm.tqdm(lstPIds):
         
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif')
 
-        # independent component analysis (ICA)
-        ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
+        # should probably delete contents first but hey
+        if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
+            # independent component analysis (ICA)
+            ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
 
-        epochs.load_data()
-        ica.fit(epochs)
+            epochs.load_data()
+            ica.fit(epochs)
+            
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+            
+        else:
+            ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
         #ica.fit(epochs, reject=reject)
 
         # Pick templates
@@ -298,18 +306,17 @@ p = 0
 b = 0
 for i, n in enumerate(icas):
     b += 1
-    if i % 7 == 0:
-        p += 1
-    if b == 8:
-        b = 1
+    p = p + 1 if i % 7 == 0 else p
+    b = 1 if  b == 8 else b
+
     try:
+        #plot_overlay excludes, not n.exclude lel.
         n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("Pid "+ str(p) +" block " +str(b)) )
-        n.exclude = n.labels_['exclude'] # do i need to do this again..? - i think so? plot overlay still plots ist
+        n.exclude = n.labels_['exclude'] # do i need to do this again..? - i think so? plot overlay still plots it
         # apparently this returns None??
-        arr_epochs[i] = n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+        n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
     except Exception as e:
         print("No ICs to exclude: \n", e)
-
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
@@ -317,7 +324,6 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #TODO consider saving finished epochs 
 #raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
-
 #%%
 pws_lst = list()
 

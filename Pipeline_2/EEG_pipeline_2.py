@@ -77,6 +77,7 @@ ica_templates = []
 ica_excludes = []
 
 Path('./ica/').mkdir(parents=True, exist_ok=True)
+Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 count = 0
 dir_path = r'./ica/'
@@ -214,7 +215,21 @@ for pid in tqdm.tqdm(lstPIds):
         ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
         
         raw.load_data()
-        ica.fit(raw)
+        
+        
+         # should probably delete contents first but hey
+        if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
+            # independent component analysis (ICA)
+            ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
+
+            raw.load_data()
+            ica.fit(raw)
+            
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+            
+        else:
+            ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
+        #ica.fit(epochs, reject=reject)
 
         # Pick templates
         #TODO put this in separate script.
@@ -269,13 +284,12 @@ b = 0
 for i, n in enumerate(icas):
     #TODO turn this into oneliner
     b += 1
-    if i % 7 == 0:
-        p += 1
-    if b == 8:
-        b = 1
+    p = p + 1 if i % 7 == 0 else p
+    b = 1 if  b == 8 else b
+
     n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
     n.exclude = n.labels_['exclude']
-    arr_raws[i] = n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
+    n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
 for i in range(len(lstPIds)):
