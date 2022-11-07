@@ -410,7 +410,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 # relative power
                 bp_alpha_rel =  bp_alpha / bp_total # alpha relative power
                 bp_theta_rel = bp_theta / bp_total # theta relative power
-
+ 
                 alpha_theta_total = bp_alpha / bp_theta
                 alpha_theta_rel = bp_alpha_rel / bp_theta_rel       
                 
