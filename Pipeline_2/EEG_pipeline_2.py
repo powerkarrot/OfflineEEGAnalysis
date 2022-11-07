@@ -70,38 +70,6 @@ bads = [[[], [], [], [], [], [],  []],
         [[], [], [], [], [], [],  []]
 ]
 
-# %%
-
-# ICA template. 
-# import pickle if it exists else run script and create template
-ica_templates = []
-ica_excludes = []
-
-Path('./ica/').mkdir(parents=True, exist_ok=True)
-Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
-
-count = 0
-dir_path = r'./ica/'
-for path in os.scandir(dir_path):
-    if path.is_file():
-        count += 1
-count /= 2
-for f in range(int(count)):
-    try:
-        with open('./ica/ica_template-' + str(int(f)) + '.pickle', 'rb') as inp:
-            ica_template = pickle.load(inp)
-            ica_templates.append(ica_template)
-    except Exception as e:
-        print(e)
-        ica_template = None
-    try:
-        with open('./ica/exclude-' + str(int(f)) + '.pickle', 'rb') as inp:
-            ica_exclude = pickle.load(inp)
-            ica_excludes.append(ica_exclude)
-    except Exception as e:
-        print(e)
-        ica_exclude = None
-    
 #all ICAs to compute
 icas = []
 icas_dict = {}
@@ -125,7 +93,10 @@ print(str(len(lstPIds)) + " subjects")
 arr_raws = []
 
 dir_path = r'./fifs/'
+
 Path(dir_path).mkdir(parents=True, exist_ok=True)
+Path('./ica/').mkdir(parents=True, exist_ok=True)
+Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
@@ -198,7 +169,6 @@ exclude_ic = [] # TODO sure its here?
 pick_ic_as_template = True
 action = None
 
-
 for pid in tqdm.tqdm(lstPIds):
     
     if action == 'no':
@@ -263,25 +233,16 @@ for pid in tqdm.tqdm(lstPIds):
                         if accept == 'yes':
                             exclude_ic = ica.exclude
                             #ica.exclude = [] # avoid excluding it twice
+                            ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
                             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-                            count = 0
-                            dir_path = r'./ica/'
-                            for path in os.scandir(dir_path):
-                                if path.is_file():
-                                    count += 1
-                            count /= 2
-                            with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
-                                pickle.dump(ica, f)
-                            with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                                pickle.dump(exclude_ic, f)
+                            done = True
+                            
+                            a = input("Quit? - yes | esc")
+                            if a == 'yes':
+                                pick_ic_as_template = False
                                 done = True
-                                
-                                a = input("Quit? - yes | esc")
-                                if a == 'yes':
-                                    pick_ic_as_template = False
-                                    done = True
 
-                                    break
+                                break
                             break
                         else:
                             a = input("Quit? - yes | esc")
@@ -295,8 +256,6 @@ for pid in tqdm.tqdm(lstPIds):
                         print(e)
                 
                 #TODO maybe do a size check before appending    
-                ica_templates.append(ica)
-                ica_excludes.append(exclude_ic)
         
         # save the ICAs for the corrmap 
         #else:
@@ -309,11 +268,22 @@ for pid in tqdm.tqdm(lstPIds):
 
  #%%
 #clean_raws = np.zeros((2, 2),dtype=object)
+ica_templates = []
+
+dir_path = r'./ica/'
+for path in os.scandir(dir_path):
+    if path.is_file():
+        #count += 1
+        #print(path.name)
+        ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
+        ica_templates.append(ica_template)
+
 clean_raws = np.zeros((len(lstPIds), NUM_BLOCKS),dtype=object)
 
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #first element of ica array is the template
-    for x, excl in enumerate(ica_excludes[n]):
+    for x, excl in enumerate(ica_templates[n].exclude):
+        #print(ica_templates[n].exclude)
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
     icas.pop(0) # remove template.
 

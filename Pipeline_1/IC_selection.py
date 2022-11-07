@@ -31,16 +31,8 @@ while not done:
                         exclude_ic = ica.exclude
                         #ica.exclude = [] # avoid excluding it twice
                         ica.save('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif', overwrite = True)
-                        count = 0
-                        dir_path = r'./ica/'
-                        for path in os.scandir(dir_path):
-                            if path.is_file():
-                                count += 1
-                        count /= 2
-                        with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
-                            pickle.dump(ica, f)
-                        with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                            pickle.dump(exclude_ic, f)
+                        ica.save('./ica/'+ str(pid) + '-' + str (block) + '_template-ica.fif', overwrite = True)
+                        
                         done = True
                         break
                     else:
