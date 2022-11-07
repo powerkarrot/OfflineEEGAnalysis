@@ -42,7 +42,6 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 
-
 # %%
 
 # %%
@@ -73,31 +72,7 @@ bads = [[[], [], [], [], [], [], []],
         [[], [], [], [], [], [], []]
 ]
 
-# %%
 
-# ICA template. 
-# import pickle if it exists else run script and create template
-
-#count /= 2
-
-    
-# for f in range(int(count)):
-#     try:
-#         with open('./ica/ica_template-' + str(pid) + '-' + str (x) + '.pickle', 'rb') as inp:
-#             ica_template = pickle.load(inp)
-#             ica_templates.append(ica_template)
-#     except Exception as e:
-#         print(e)
-#         ica_template = None
-#     try:
-#         with open('./ica/exclude-' + str(pid) + '-' + str (x) + '.pickle', 'rb') as inp:
-#             ica_exclude = pickle.load(inp)
-#             ica_excludes.append(ica_exclude)
-#     except Exception as e:
-#         print(e)
-#         ica_exclude = None
-    
-# all ICAs to compute
 icas = []
 
 # %%
@@ -117,6 +92,8 @@ print(str(len(lstPIds)) + " subjects")
 
 dir_path = r'./fifs'
 Path('./fifs').mkdir(parents=True, exist_ok=True)
+Path('./ica/').mkdir(parents=True, exist_ok=True)
+Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
 
@@ -309,9 +286,6 @@ for pid in tqdm.tqdm(lstPIds):
 ica_templates = []
 ica_excludes = []
 
-Path('./ica/').mkdir(parents=True, exist_ok=True)
-Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
-
 #count = 0
 dir_path = r'./ica/'
 for path in os.scandir(dir_path):
@@ -333,7 +307,7 @@ if len(arr_epochs) < 1:
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
-        print(ica_templates[n].exclude)
+        #print(ica_templates[n].exclude)
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
     icas.pop(0) # remove template.
     
