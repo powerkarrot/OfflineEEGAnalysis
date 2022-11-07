@@ -249,39 +249,68 @@ for pid in tqdm.tqdm(lstPIds):
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
+            
+        #TODO put this somewhere else
+        clean_ica_excludes = False
+        if(clean_ica_excludes):
+            ica.exclude = []
 
         # Pick templates
-        #TODO put this in separate script.
         if(pick_ic_as_template):
- 
-            #ica.plot_components()
-            #ica.plot_properties(epochs, picks=ica.exclude)
-            
-            ica.plot_sources(epochs, block = True)
-            
-            exclude_ic = ica.exclude
-            ica.exclude = [] # avoid excluding it twice
-            
-            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg')
-
-            ready_to_write = True 
-            if(ready_to_write):
-                count = 0
-                dir_path = r'./ica/'
-                for path in os.scandir(dir_path):
-                    if path.is_file():
-                        count += 1
-                count /= 2
+            done = False
+            while not done:
                 
-                with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(ica, f)
-                with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(exclude_ic, f)
-                    
+                #ica.plot_components()
+                #ica.plot_properties(epochs, picks=ica.exclude)
+                
+                ica.plot_sources(epochs, block = True)
+                ics_old = ica.exclude
+
+                ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+
+                while True:
+                    accept = input("Accept? - yes | esc")
+                    try:
+                        if accept == 'yes':
+                            exclude_ic = ica.exclude
+                            #ica.exclude = [] # avoid excluding it twice
+                            
+                            ready_to_write = True 
+                            if(ready_to_write):
+                                count = 0
+                                dir_path = r'./ica/'
+                                for path in os.scandir(dir_path):
+                                    if path.is_file():
+                                        count += 1
+                                count /= 2
+                                
+                                with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
+                                    pickle.dump(ica, f)
+                                with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
+                                    pickle.dump(exclude_ic, f)
+                                done = True
+                                a = input("Quit? - yes | esc")
+                                if a == 'yes':
+                                    pick_ic_as_template = False
+                                    done = True
+                                    break
+                            break
+                        else:
+                            ica.exclude = ics_old # doesn't to anything
+                            a = input("Quit? - yes | esc")
+                            if a == 'yes':
+                                pick_ic_as_template = False
+                                done = True
+                                break     
+                            else:
+                                break              
+                    except Exception as e:
+                        print(e)
+                        
                 #TODO maybe do a size check before appending    
                 ica_templates.append(ica)
                 ica_excludes.append(exclude_ic)
-                            
+                                
         # save the ICAs for the corrmap 
         icas.append(ica)
         #arr_epochs.append(epochs)

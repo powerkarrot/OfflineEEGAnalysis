@@ -237,17 +237,22 @@ for pid in tqdm.tqdm(lstPIds):
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-
+        
+        #TODO put this somewhere else
+        clean_ica_excludes = False
+        if(clean_ica_excludes):
+            ica.exclude = []
+            
+            
         # Pick templates
-        #TODO put this in separate script.
-        if(pick_ic_as_template):
-            
-            
+        if(pick_ic_as_template):                
             done = False
+            
             while not done: 
+                
                 ica.plot_sources(raw, block = True)
             
-                exclude_ic = ica.exclude
+                #exclude_ic = ica.exclude
                 #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
             
                 ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360. , title = str(pid) + '-' + str(x) )

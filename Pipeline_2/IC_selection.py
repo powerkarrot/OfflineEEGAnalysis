@@ -24,11 +24,12 @@ while not done:
             ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360.)
             
             while True:
+                #TODO User input validation? Who cares!
                 accept = input("Accept? - yes | esc")
                 try:
                     if accept == 'yes':
                         exclude_ic = ica.exclude
-                        ica.exclude = [] # avoid excluding it twice
+                        #ica.exclude = [] # avoid excluding it twice
                         ica.save('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif', overwrite = True)
                         count = 0
                         dir_path = r'./ica/'

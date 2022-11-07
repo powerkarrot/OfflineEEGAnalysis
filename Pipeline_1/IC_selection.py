@@ -15,6 +15,7 @@ while not done:
         block = action.split()[1]
         try:
             epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(block) + '-epo.fif')
+            epochs.load_data()
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif') 
             ica.plot_sources(epochs, block = True)
             exclude_ic = ica.exclude
@@ -23,6 +24,7 @@ while not done:
             ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
             
             while True:
+                #TODO User input validation? Who cares!
                 accept = input("Accept? - yes | esc")
                 try:
                     if accept == 'yes':
