@@ -198,13 +198,14 @@ exclude_ic = [] # TODO sure its here?
 pick_ic_as_template = True
 action = None
 
+
 for pid in tqdm.tqdm(lstPIds):
     
     if action == 'no':
         pick_ic_as_template = False
     else:
-        valid_response = {'no', 'yes'} 
-        prompts = chain(["Select ICs for ICE corrmap? - ENTER | no"], repeat("Type ENTER or \"no\": "))
+        valid_response = {'no', 'yes', int} 
+        prompts = chain(["Select ICs for ICE corrmap? - yes | no"], repeat("Type yes or \"no\": "))
         replies = map(input, prompts)
         lowercased_replies = map(str.lower, replies)
         stripped_replies = map(str.strip, lowercased_replies)
@@ -236,31 +237,62 @@ for pid in tqdm.tqdm(lstPIds):
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-
+        
+        #TODO put this somewhere else
+        clean_ica_excludes = False
+        if(clean_ica_excludes):
+            ica.exclude = []
+            
+            
         # Pick templates
-        #TODO put this in separate script.
-        if(pick_ic_as_template):
+        if(pick_ic_as_template):                
+            done = False
             
-            ica.plot_sources(raw, block = True)
-            
-            exclude_ic = ica.exclude
-            #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
-            
-            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360.)
-
-            ready_to_write = True 
-            if(ready_to_write):
-                count = 0
-                dir_path = r'./ica/'
-                for path in os.scandir(dir_path):
-                    if path.is_file():
-                        count += 1
-                count /= 2
+            while not done: 
                 
-                with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(ica, f)
-                with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(exclude_ic, f)
+                ica.plot_sources(raw, block = True)
+            
+                #exclude_ic = ica.exclude
+                #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
+            
+                ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360. , title = str(pid) + '-' + str(x) )
+        
+                while True:
+                    accept = input("Accept? - yes | esc")
+                    try:
+                        if accept == 'yes':
+                            exclude_ic = ica.exclude
+                            #ica.exclude = [] # avoid excluding it twice
+                            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+                            count = 0
+                            dir_path = r'./ica/'
+                            for path in os.scandir(dir_path):
+                                if path.is_file():
+                                    count += 1
+                            count /= 2
+                            with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
+                                pickle.dump(ica, f)
+                            with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
+                                pickle.dump(exclude_ic, f)
+                                done = True
+                                
+                                a = input("Quit? - yes | esc")
+                                if a == 'yes':
+                                    pick_ic_as_template = False
+                                    done = True
+
+                                    break
+                            break
+                        else:
+                            a = input("Quit? - yes | esc")
+                            if a == 'yes':
+                                pick_ic_as_template = False
+                                done = True
+                                break     
+                            else:
+                                break              
+                    except Exception as e:
+                        print(e)
                 
                 #TODO maybe do a size check before appending    
                 ica_templates.append(ica)
@@ -292,9 +324,12 @@ for i, n in enumerate(icas):
     p = p + 1 if i % 7 == 0 else p
     b = 1 if  b == 8 else b
 
-    n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
-    n.exclude = n.labels_['exclude']
-    n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
+    if 'exclude' in n.labels_:
+        #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+        #n.exclude = n.labels_['exclude']
+        n.exclude = n.labels_['exclude']
+        n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+        n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
 for i in range(len(lstPIds)):

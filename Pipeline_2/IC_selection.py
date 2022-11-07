@@ -14,15 +14,17 @@ while not done:
         pid = action.split()[0]
         block = action.split()[1]
         try:
-            epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(block) + '-epo.fif')
+            raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(block) + '_eeg.fif')
+            raw.load_data()
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif') 
-            ica.plot_sources(epochs, block = True)
+            ica.plot_sources(raw, block = True)
             exclude_ic = ica.exclude
             #ica.exclude = [] # avoid excluding it twice
             
-            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+            ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360.)
             
             while True:
+                #TODO User input validation? Who cares!
                 accept = input("Accept? - yes | esc")
                 try:
                     if accept == 'yes':
