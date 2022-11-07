@@ -248,19 +248,29 @@ for pid in tqdm.tqdm(lstPIds):
             
             ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360.)
 
-            ready_to_write = True 
-            if(ready_to_write):
-                count = 0
-                dir_path = r'./ica/'
-                for path in os.scandir(dir_path):
-                    if path.is_file():
-                        count += 1
-                count /= 2
-                
-                with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(ica, f)
-                with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
-                    pickle.dump(exclude_ic, f)
+            while True:
+                accept = input("Accept? - yes | esc")
+                try:
+                    if accept == 'yes':
+                        exclude_ic = ica.exclude
+                        #ica.exclude = [] # avoid excluding it twice
+                        ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+                        count = 0
+                        dir_path = r'./ica/'
+                        for path in os.scandir(dir_path):
+                            if path.is_file():
+                                count += 1
+                        count /= 2
+                        with open('./ica/ica_template-' + str(int(count)) + '.pickle', 'wb') as f:
+                            pickle.dump(ica, f)
+                        with open('./ica/exclude-'+ str(int(count)) + '.pickle', 'wb') as f:
+                            pickle.dump(exclude_ic, f)
+                        done = True
+                        break
+                    else:
+                        break                   
+                except:
+                    print("oof")
                 
                 #TODO maybe do a size check before appending    
                 ica_templates.append(ica)
