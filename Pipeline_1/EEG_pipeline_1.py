@@ -225,13 +225,6 @@ for pid in tqdm.tqdm(lstPIds):
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
             
-        #TODO put this somewhere else
-        clean_ica_excludes = False
-        if(clean_ica_excludes):
-            ica.exclude = []
-            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-
-
         # Pick templates
         if(pick_ic_as_template):
             done = False
@@ -279,6 +272,12 @@ for pid in tqdm.tqdm(lstPIds):
                     except Exception as e:
                         print(e)
                         
+        #TODO put this somewhere else
+        clean_ica_excludes = False
+        if(clean_ica_excludes):
+            ica.exclude = []
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)        
+                    
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
@@ -392,7 +391,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
         
                 # Normalize the PSDs ?
-                psds /= np.sum(psds, axis=-1, keepdims=True) 
+                #psds /= np.sum(psds, axis=-1, keepdims=True) 
                 
                 # #convert to DB
                 psdsDB = 10 * np.log10(psds)
