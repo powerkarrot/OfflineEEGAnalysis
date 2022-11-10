@@ -231,10 +231,9 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
-                #ica.plot_components()
-                #ica.plot_properties(epochs, picks=ica.exclude)
-                
-                ica.plot_sources(epochs, block = True)
+                #ica.plot_components(psd_args='fmin=13')
+                #ica.plot_properties(epochs, dB= True, log_scale= False, psd_args={'fmax':30})
+                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x) )
                 ics_old = ica.exclude
 
                 ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)

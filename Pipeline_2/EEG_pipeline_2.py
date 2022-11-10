@@ -220,7 +220,8 @@ for pid in tqdm.tqdm(lstPIds):
             
             while not done: 
                 
-                ica.plot_sources(raw, block = True)
+                #ica.plot_properties(raw, dB= True, log_scale= False, psd_args={'fmax':30})
+                ica.plot_sources(raw, block = True, title = str(pid) + '-' + str(x) )
             
                 #exclude_ic = ica.exclude
                 #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
@@ -301,7 +302,8 @@ for i, n in enumerate(icas):
         n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
         n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
-# for whatever reason i cant do a reshape with the arr_raws array. works with epochs though, so..... 
+# for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
+# i could look into it. later.
 for i in range(len(lstPIds)):
     for j in range(NUM_BLOCKS):
         clean_raws[i][j] = arr_raws[j%NUM_BLOCKS+i*NUM_BLOCKS]
