@@ -180,6 +180,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             # Autoreject based on rejection threshold
             #reject = dict(eeg=400e-6)  # unit: uV (EEG channels) dont forget the sample conversion to uV
             reject = get_rejection_threshold(epochs, ch_types = 'eeg')
+            
             reject['eeg'] = reject['eeg']
             print("The rejection dictionary is %s " %reject)
             epochs.drop_bad(reject=reject)  
@@ -230,9 +231,8 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
-                #ica.plot_components(psd_args='fmin=13')
-                #ica.plot_properties(epochs, dB= True, log_scale= False, psd_args={'fmax':30})
-                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x) )
+                ica.plot_properties(epochs, dB= True, log_scale= False, psd_args={'fmax':30})
+                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 118 )
                 ics_old = ica.exclude
 
                 ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
@@ -273,7 +273,7 @@ for pid in tqdm.tqdm(lstPIds):
                         print(e)
                         
         #TODO put this somewhere else
-        clean_ica_excludes = False
+        clean_ica_excludes = True
         if(clean_ica_excludes):
             ica.exclude = []
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)        
@@ -284,7 +284,6 @@ for pid in tqdm.tqdm(lstPIds):
         arr_epochs.append(epochs)
         # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
- #%%
  
  # %%
 ica_templates = []
@@ -308,7 +307,8 @@ for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
         #print(ica_templates[n].exclude)
-        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', plot=False)
+        #threshold=0.9
+        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
     icas.pop(0) # remove template.
     
 p = 0
@@ -316,6 +316,9 @@ b = 0
 for i, n in enumerate(icas):
     b += 1
     p = p + 1 if i % 7 == 0 else p
+    if p == 4: p = 5
+    if p == 8:  p = 9
+    if p == 10: p = 11
     b = 1 if  b == 8 else b
 
     try:
@@ -394,7 +397,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
         
                 # Normalize the PSDs ?
-                #psds /= np.sum(psds, axis=-1, keepdims=True) 
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
                 
                 # #convert to DB
                 psdsDB = 10 * np.log10(psds)
