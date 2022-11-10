@@ -202,18 +202,19 @@ for pid in tqdm.tqdm(lstPIds):
         raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif')
           
         # # independent component analysis (ICA)        
-        ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
+        #ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
         
-        raw.load_data()
         
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             
             
-
             # independent component analysis (ICA)
             #ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
-            ica = mne.preprocessing.ICA(method="fastica", random_state=97, max_iter='auto')
+            ica = mne.preprocessing.ICA(method="infomax", random_state = 97, max_iter='auto')
+            
+            raw.load_data()
+
 
             #raw.load_data()
             #TODO: apply 1.0 high pass filter only to copy of raw to fit in ICA (mne docu)
