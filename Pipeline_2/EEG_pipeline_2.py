@@ -27,6 +27,14 @@ mne.set_log_level(False)
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
 
+# %%
+def get_user_input(valid_response, prompt, err_prompt):
+    prompts = chain([prompt], repeat(err_prompt))
+    replies = map(input, prompts)
+    lowercased_replies = map(str.lower, replies)
+    stripped_replies = map(str.strip, lowercased_replies)
+    return next(filter(valid_response.__contains__, stripped_replies))
+
 
 # %%
 NUM_BLOCKS = 7
@@ -174,13 +182,9 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        valid_response = {'no', 'yes', int} 
-        prompts = chain(["Select ICs for ICE corrmap? - yes | no"], repeat("Type yes or \"no\": "))
-        replies = map(input, prompts)
-        lowercased_replies = map(str.lower, replies)
-        stripped_replies = map(str.strip, lowercased_replies)
-        action = next(filter(valid_response.__contains__, stripped_replies))
-        #action = input("Select ICs for ICE corrmap? - ENTER | no")
+        action = get_user_input(valid_response={'no', 'yes'},
+                    prompt="Select ICs for ICE corrmap? - yes | no", 
+                    err_prompt="Type  \"yes\" or \"no\": \n")
         
         if action == 'no':
             pick_ic_as_template = False
@@ -193,7 +197,6 @@ for pid in tqdm.tqdm(lstPIds):
         ica = mne.preprocessing.ICA(method="infomax",max_iter='auto')
         
         raw.load_data()
-        
         
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
@@ -212,8 +215,7 @@ for pid in tqdm.tqdm(lstPIds):
         clean_ica_excludes = False
         if(clean_ica_excludes):
             ica.exclude = []
-            
-            
+                
         # Pick templates
         if(pick_ic_as_template):                
             done = False
@@ -229,7 +231,9 @@ for pid in tqdm.tqdm(lstPIds):
                 ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', stop = 360. , title = str(pid) + '-' + str(x) )
         
                 while True:
-                    accept = input("Accept? - yes | esc")
+                    accept = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Accept? - yes | no",
+                                            err_prompt = "yes | no")
                     try:
                         if accept == 'yes':
                             exclude_ic = ica.exclude
@@ -237,17 +241,19 @@ for pid in tqdm.tqdm(lstPIds):
                             ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
                             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
                             done = True
-                            
-                            a = input("Quit? - yes | esc")
-                            if a == 'yes':
+                            quit = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Quit? - yes | no",
+                                            err_prompt = "yes | no")
+                            if quit == 'yes':
                                 pick_ic_as_template = False
                                 done = True
-
                                 break
                             break
                         else:
-                            a = input("Quit? - yes | esc")
-                            if a == 'yes':
+                            quit = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Quit? - yes | no",
+                                            err_prompt = "yes | no")
+                            if quit == 'yes':
                                 pick_ic_as_template = False
                                 done = True
                                 break     
@@ -256,10 +262,8 @@ for pid in tqdm.tqdm(lstPIds):
                     except Exception as e:
                         print(e)
                 
-                #TODO maybe do a size check before appending    
-        
+        #TODO maybe do a size check before appending    
         # save the ICAs for the corrmap 
-        #else:
 
         icas.append(ica)
         arr_raws.append(raw)

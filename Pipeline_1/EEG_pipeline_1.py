@@ -29,6 +29,14 @@ plt.rcParams.update({'figure.max_open_warning': 0})
 
 
 # %%
+def get_user_input(valid_response, prompt, err_prompt):
+    prompts = chain([prompt], repeat(err_prompt))
+    replies = map(input, prompts)
+    lowercased_replies = map(str.lower, replies)
+    stripped_replies = map(str.strip, lowercased_replies)
+    return next(filter(valid_response.__contains__, stripped_replies))
+
+# %%
 
 NUM_BLOCKS = 7
 
@@ -192,12 +200,10 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        valid_response = {'no', 'yes'} 
-        prompts = chain(["Select ICs for ICE corrmap? - ENTER | no"], repeat("Type ENTER or \"no\": "))
-        replies = map(input, prompts)
-        lowercased_replies = map(str.lower, replies)
-        stripped_replies = map(str.strip, lowercased_replies)
-        action = next(filter(valid_response.__contains__, stripped_replies))
+        action = get_user_input(valid_response={'no', 'yes'},
+                    prompt="Select ICs for ICE corrmap? - yes | no", 
+                    err_prompt="Type  \"yes\" or \"no\": \n")
+        
         if action == 'no':
             pick_ic_as_template = False
                 
@@ -239,30 +245,32 @@ for pid in tqdm.tqdm(lstPIds):
                 ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
 
                 while True:
-                    accept = input("Accept? - yes | esc")
+                    accept = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Accept? - yes | no",
+                                            err_prompt = "yes | no")
                     try:
                         if accept == 'yes':
                             exclude_ic = ica.exclude
                             #ica.exclude = [] # avoid excluding it twice
-                            ready_to_write = True 
-                            
+                            ready_to_write = True                            
                             if(ready_to_write):
                                 ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
                                 ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-                                print(ica.exclude)
                                 done = True
-                
-                                a = input("Quit? - yes | esc")
-                                
-                                if a == 'yes':
+                                quit = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Quit? - yes | no",
+                                            err_prompt = "yes | no")                   
+                                if quit == 'yes':
                                     pick_ic_as_template = False
                                     done = True
                                     break
                             break
                         else:
                             ica.exclude = ics_old # doesn't to anything
-                            a = input("Quit? - yes | esc")
-                            if a == 'yes':
+                            quit = get_user_input(valid_response={'no', 'yes'},
+                                            prompt="Quit? - yes | no",
+                                            err_prompt = "yes | no")                       
+                            if quit == 'yes':
                                 pick_ic_as_template = False
                                 done = True
                                 break     
@@ -271,12 +279,10 @@ for pid in tqdm.tqdm(lstPIds):
                     except Exception as e:
                         print(e)
                         
-                #TODO maybe do a size check before appending    
-
-                                
+        #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
-        #arr_epochs.append(epochs)
+        arr_epochs.append(epochs)
         # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
  #%%
@@ -296,13 +302,6 @@ for path in os.scandir(dir_path):
  
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
-#TODO just add epochs next to icas append -.-
-#altho this is better for testing, reloads fresh epochs without ICA
-if len(arr_epochs) < 1:
-    for pid in tqdm.tqdm(lstPIds):
-        for x in range(1, NUM_BLOCKS+1): 
-            arr_epochs.append(mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif'))
-            
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
