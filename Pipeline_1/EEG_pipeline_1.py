@@ -297,7 +297,10 @@ for path in os.scandir(dir_path):
         #count += 1
         #print(path.name)
         ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
-        ica_templates.append(ica_template)
+        if(ica_template.exclude != []):           
+            ica_templates.append(ica_template)
+        else:
+            os.remove(dir_path + path.name)
  
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
