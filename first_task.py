@@ -34,9 +34,9 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
-plot_plots = True       
+plot_plots = False       
 save_plots = False
-draw_plots = True
+draw_plots = False
 
 # %%
 
@@ -83,7 +83,7 @@ for pid in tqdm.tqdm(lstPIds):
     dfAll = dfAll.dropna()
     
 
-    for x in range(1, 8):  
+    for x in range(1, 2):  
         
         # if(x > 1):
         #     break
@@ -163,7 +163,7 @@ for pid in tqdm.tqdm(lstPIds):
                 psds, freqs = spectrum.get_data(return_freqs=True)
                 
                 # Normalize the PSDs ?
-                psds /= np.sum(psds, axis=-1, keepdims=True)
+                #psds /= np.sum(psds, axis=-1, keepdims=True)
                 
                 # convert to dB
                 #psds = 10 * np.log10(psds)
