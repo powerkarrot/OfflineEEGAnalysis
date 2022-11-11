@@ -103,8 +103,8 @@ arr_raws = []
 dir_path = r'./fifs/'
 
 Path(dir_path).mkdir(parents=True, exist_ok=True)
-#Path('./ica/').mkdir(parents=True, exist_ok=True)
-Path('./ica/fifs/epochs').mkdir(parents=True, exist_ok=True)
+Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
+Path('./ica/epochs').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./Plots/NoICA').mkdir(parents=True, exist_ok=True)
 
@@ -156,10 +156,8 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             raw.drop_channels(['Time', 'BlockNumber'])
             
             #high pass filter to remove slow drifts, 70 Hz low pass
-            #raw.filter(1., 70., None, fir_design='firwin')
-            #TODO im using .1 not 1.?
             #raw.filter(.1, 70, None, fir_design='firwin')
-            raw.filter(.1, 70, None, fir_design='firwin')
+            raw.filter(1., 70, None, fir_design='firwin')
 
             #remove power line interferance
             raw.notch_filter(50, n_jobs=-1)
@@ -171,11 +169,11 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             # TODO, empty list for now. With new setup, check for bad channels only once for all blocks.
             raw.info['bads'] =  bads[pid-1][x-1]
             if raw.info['bads'] != []:
-                raw.interpolate_bads()            
+                raw.interpolate_bads()   
             
             #arr_raws.append(raw)
             raw.save('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', overwrite = False)
-
+               
 
 # %%
 
@@ -185,6 +183,7 @@ action = None
 
 for pid in tqdm.tqdm(lstPIds):
     
+    # don't ask for input for all participants
     if action == 'no':
         pick_ic_as_template = False
     else:
@@ -198,11 +197,8 @@ for pid in tqdm.tqdm(lstPIds):
     for x in range(1, NUM_BLOCKS+1):  
         
         raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', preload=True)
-        
-        #TODO: apply 1.0 high pass filter only to copy of raw to fit in ICA (mne docu)
-        filt_raw = raw.copy().filter(l_freq=1., h_freq=None)
           
-        # # independent component analysis (ICA)                
+        # independent component analysis (ICA)                
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
         #if(True):
@@ -211,35 +207,32 @@ for pid in tqdm.tqdm(lstPIds):
             #ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
             ica = mne.preprocessing.ICA(method="infomax", random_state = 97, max_iter='auto')
             
-            # make one second epochs to use autoreject for ICA
-            # later fit to raw data
-            tstep = 1.
-            epochs = mne.make_fixed_length_epochs(filt_raw, preload=True, duration = tstep)
+            # make one second epochs for ICA fit
+            # later aply to raw data
+            tstep = 4.
+            epochs = mne.make_fixed_length_epochs(raw, preload=True, duration = tstep)
             reject = get_rejection_threshold(epochs, ch_types = 'eeg')
-            reject['eeg'] = reject['eeg']
-            reject
             #print("The rejection dictionary is %s " %reject)
             epochs.drop_bad(reject=reject) 
             
             ica.fit(epochs, tstep=tstep)
-            #ica.fit(filt_raw)
             #ica.fit(raw, reject=reject)
 
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-            epochs.save('./ica/fifs/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
+            epochs.save('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
           
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-            epochs = mne.io.read_epochs('./ica/fifs/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
+            epochs = mne.read_epochs('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
             
         # Optionally autoreject muscle and eog artifacts
-        pick_ic_auto = True
+        pick_ic_auto = False
         if (pick_ic_auto):
             
             ica_z_thresh = 1.96
-            eog_indices, eog_scores = ica.find_bads_eog(filt_raw, 
+            eog_indices, eog_scores = ica.find_bads_eog(raw, 
                                                         ch_name=['F3', 'F4'], 
-                                                        threshold=ica_z_thresh)
+                                                        threshold=3)
             
             muscle_idx_auto = []
             
@@ -260,8 +253,6 @@ for pid in tqdm.tqdm(lstPIds):
             for item in muscle_idx_auto + eog_indices :
                 if item not in ica.exclude:
                     ica.exclude.append(item)
-            #ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)        
-            #ica.plot_overlay(raw, exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x), start = 20., stop=360. )
         
         # Optionally pick templates for corrmap
         if(pick_ic_as_template):                
@@ -366,7 +357,7 @@ for i, n in enumerate(icas):
 
     # add excluded ICs from corrmap to ica.exclude
     if 'exclude' in n.labels_:
-        #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+        n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
         #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
 
         if(pick_ic_auto):
@@ -376,8 +367,9 @@ for i, n in enumerate(icas):
         else:
             n.exclude = n.labels_['exclude']
             
-        #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+    #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
     print("excludes" ,n.exclude)
+    #n.exclude=[0,1,2,3,4,5]
     n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
