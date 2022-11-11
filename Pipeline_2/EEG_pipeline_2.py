@@ -204,8 +204,8 @@ for pid in tqdm.tqdm(lstPIds):
           
         # # independent component analysis (ICA)                
         # should probably delete contents first but hey
-        #if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
-        if(True):
+        if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
+        #if(True):
             
             # independent component analysis (ICA)
             #ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
@@ -227,8 +227,7 @@ for pid in tqdm.tqdm(lstPIds):
 
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             epochs.save('./ica/fifs/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
-
-            
+          
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
             epochs = mne.io.read_epochs('./ica/fifs/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
