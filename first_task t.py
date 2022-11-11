@@ -176,12 +176,12 @@ for pid in tqdm.tqdm(lstPIds):
         #print("The rejection dictionary is %s " %reject)
         epochs.drop_bad(reject=reject) 
         
-        ica.fit(ica_raw, tstep=tstep)
+        ica.fit(epochs, tstep=tstep, reject=reject)
 
         #ica.plot_sources(ica_raw, block = True, title = str(pid) + '-' + str(x) )
 
         ica.exclude = [0,1,2,3,4,5,6]
-        ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', stop=360.)
+        ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg')
         
         ica.apply(raw)
 
