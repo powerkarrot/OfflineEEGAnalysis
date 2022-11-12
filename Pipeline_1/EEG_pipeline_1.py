@@ -210,7 +210,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
 
-
 # %%
 exclude_ic = [] # TODO sure its here?
 pick_ic_as_template = True
@@ -244,7 +243,39 @@ for pid in tqdm.tqdm(lstPIds):
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
+         
+        # Optionally autoreject muscle and eog artifacts
+        pick_ic_auto = True
+        if (pick_ic_auto):
+            #start fresh, else find_bads_muscle fails
+            ica.exclude = []
+            print(str(pid) + ' block ' + str(x))
             
+            ica_z_thresh = 1.96
+            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
+                                                        ch_name=['F3', 'F4'], 
+                                                        threshold=ica_z_thresh)
+            print(f'Automatically found eye artifact ICA components: {eog_indices}')
+
+            # ica.plot_scores(eog_scores)  
+            # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
+            muscle_idx_auto = []
+            
+            if(True):
+                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
+                #ica.plot_scores(scores, exclude=muscle_idx_auto)
+                
+                print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
+                #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
+            
+            for item in muscle_idx_auto + eog_indices :
+                if item not in ica.exclude:
+                    ica.exclude.append(item)
+                    
+            #print("excludes are" , ica.exclude)
+            
+            #ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x) )
+
         # Pick templates
         if(pick_ic_as_template):
             done = False
@@ -290,13 +321,18 @@ for pid in tqdm.tqdm(lstPIds):
                                 break              
                     except Exception as e:
                         print(e)
-                        
+        
+        # TODO remove save ica from template picker  
+        # if there are excludes in ica, template doesnt work :DDDD      
+        ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)       
+           
         #TODO put this somewhere else
-        clean_ica_excludes = True
+        clean_ica_excludes = False
         if(clean_ica_excludes):
+            print("removing excludes")
             ica.exclude = []
-            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)        
-                    
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)   
+              
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
@@ -325,7 +361,6 @@ clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
-        #print(ica_templates[n].exclude)
         #threshold=0.9
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
     icas.pop(0) # remove template.
@@ -339,24 +374,32 @@ for i, n in enumerate(icas):
     if p == 8:  p = 9
     if p == 10: p = 11
     b = 1 if  b == 8 else b
-
-    try:
-        #plot_overlay excludes, not n.exclude lel.
-        n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("Pid "+ str(p) +" block " +str(b)) )
-        n.exclude = n.labels_['exclude'] # do i need to do this again..? - i think so? plot overlay still plots it
-        # apparently this returns None??
-        
-    except Exception as e:
-        print("No ICs to exclude: \n", e)
     
-    #n_exclude = [0,1,2,3,4,5]
+    print(p , " block ", b)
+
+    if 'exclude' in n.labels_:
+        #n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("p "+ str(p) +" block " +str(b)) )
+        
+        #add autodetected artifacts to exclude
+        if(pick_ic_auto):
+            for item in  n.labels_['exclude'] :
+                if item not in n.exclude:
+                    n.exclude.append(item)
+        else:
+            n.exclude = n.labels_['exclude']
+    else:
+        print("No templates selected \n")
+    
+    #n.exclude = [0,1,2,3,4,5]
+    #print("Final ICAs to exclude are" ,n.exclude)
+    #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
     n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
-# TODO save preprocessed epochs        
-#raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+# TODO save preprocessed epochs. not here.        
+#raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
     
 #%%
 pws_lst = list()
