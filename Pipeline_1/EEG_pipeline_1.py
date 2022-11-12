@@ -49,8 +49,8 @@ bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})
 epochs_tstep = 4.
 
 #Script config
-plot_plots = True       
-save_plots = True
+plot_plots = False       
+save_plots = False
 draw_plots = False
 pick_ic_auto = False
 
