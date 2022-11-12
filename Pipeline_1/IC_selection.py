@@ -21,7 +21,7 @@ while not done:
             exclude_ic = ica.exclude
             #ica.exclude = [] # avoid excluding it twice
             
-            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+            ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 119., title = str(pid) + '-' + str(block))
             
             while True:
                 #TODO User input validation? Who cares!
