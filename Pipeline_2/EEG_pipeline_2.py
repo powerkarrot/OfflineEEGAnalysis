@@ -109,7 +109,6 @@ Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./Plots/NoICA').mkdir(parents=True, exist_ok=True)
 
 
-
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
 
