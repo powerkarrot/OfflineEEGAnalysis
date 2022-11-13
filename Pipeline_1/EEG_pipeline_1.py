@@ -111,7 +111,7 @@ if TEST:
 
 dir_path = r'./fifs'
 Path('./fifs').mkdir(parents=True, exist_ok=True)
-Path('./Plots').mkdir(parents=True, exist_ok=True)
+Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
@@ -195,7 +195,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
                 
                 # Global autoreject based on rejection threshold
-                reject = get_rejection_threshold(epochs, ch_types = 'eeg')      
+                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
                 #print("The rejection dictionary is %s " %reject)
                 epochs.drop_bad(reject=reject)
                 #epochs.plot_drop_log()
