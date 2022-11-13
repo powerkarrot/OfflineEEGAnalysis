@@ -3,7 +3,6 @@ import os
 import numpy as np
 import mne
 import pandas as pd
-import pickle
 import tqdm 
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -47,9 +46,15 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
+epochs_tstep = 4.
+
+#Script config
 plot_plots = False       
 save_plots = False
 draw_plots = False
+pick_ic_auto = False
+
+TEST = False
 
 # %%
 
@@ -81,7 +86,6 @@ bads = [[[], [], [], [], [], [], []],
         [[], [], [], [], [], [], []]
 ]
 
-
 icas = []
 
 # %%
@@ -97,10 +101,17 @@ lstPIds = list(set(lstPIds))
 print(lstPIds)
 print(str(len(lstPIds)) + " subjects")
 
+#for TESTING
+if TEST:
+    lstPIds = [1, 2]
+    lstPIds = list(set(lstPIds))
+    NUM_BLOCKS = 2
+
 # %%
 
 dir_path = r'./fifs'
 Path('./fifs').mkdir(parents=True, exist_ok=True)
+Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
@@ -115,6 +126,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
         # if (pid > 2):
         #         break
         if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
+        #if True:
 
         
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
@@ -177,38 +189,20 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 # raw.plot_psd()
                 
                 # Create equal length epochs of 4 seconds
-                epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = 4)
+                epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
                 
                 #evoked.plot_joint(picks='eeg')
                 #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
                 
-                # Autoreject based on rejection threshold
-                
-                reject = get_rejection_threshold(epochs, ch_types = 'eeg')
+                # Global autoreject based on rejection threshold
+                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
                 #print("The rejection dictionary is %s " %reject)
-                #
                 epochs.drop_bad(reject=reject)
                 #epochs.plot_drop_log()
-                #epochs.average().plot()
-                if(False):
-                    ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-                    
-                    #ar.fit(epochs_ica)
-                
-    #                #reject_log.plot('horizontal')
-                
-                    #evoked_bad = epochs[reject_log.bad_epochs].average()
-                    #evoked_bad = epochs_clean.average()
-    
-                    #plt.figure()
-                    #plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
-                    #epochs_ar.average().plot(axes=plt.gca())
-                    
-                    epochs_clean = ar.fit_transform(epochs_ica) 
+                #epochs.average().plot()                 
                 
                 #arr_epochs.append(epochs)
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
-
 
 
 # %%
@@ -231,20 +225,63 @@ for pid in tqdm.tqdm(lstPIds):
     for x in range(1, NUM_BLOCKS+1):  
         
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
-
+        
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             # independent component analysis (ICA)
-            ica = mne.preprocessing.ICA(method="fastica", n_components = 5, random_state=97, max_iter='auto')
+            
+            ica = mne.preprocessing.ICA(method="fastica",  random_state=97)
+            
+            #TODO decide later. if yes, dont forget to redo it after ica apply
+            local_autoreject = False
+            if local_autoreject:
+                ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
+                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
+                reject_log.plot('horizontal')
+                evoked_bad = epochs[reject_log.bad_epochs].average()
+                plt.figure()
+                plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
+                epochs_clean.average().plot(axes=plt.gca())
+                #epochs = epochs_clean
+                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
 
             ica.fit(epochs)
-            #ica.fit(epochs, reject=reject) # to reject or not reject, that is the question
-            
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
+         
+        # Optionally autoreject muscle and eog artifacts
+        if (pick_ic_auto):
+            #start fresh, else find_bads_muscle fails
+            ica.exclude = []
+            #print(str(pid) + ' block ' + str(x))
             
+            ica_z_thresh = 1.96
+            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
+                                                        ch_name=['F3', 'F4'], 
+                                                        threshold=ica_z_thresh)
+            #print(f'Automatically found eye artifact ICA components: {eog_indices}')
+
+            # ica.plot_scores(eog_scores)  
+            # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
+            muscle_idx_auto = []
+            
+            #TODO make true again, just not with  this data...
+            if(False):
+                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
+                #ica.plot_scores(scores, exclude=muscle_idx_auto)
+                
+                #print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
+                #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
+            
+            for item in muscle_idx_auto + eog_indices :
+                if item not in ica.exclude:
+                    ica.exclude.append(item)
+                    
+            #print("excludes are" , ica.exclude)
+            #ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x) )
+
         # Pick templates
         if(pick_ic_as_template):
             done = False
@@ -290,13 +327,18 @@ for pid in tqdm.tqdm(lstPIds):
                                 break              
                     except Exception as e:
                         print(e)
-                        
+        
+        # TODO remove save ica from template picker  
+        # if there are excludes in ica, template doesnt work :DDDD      
+        ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)       
+           
         #TODO put this somewhere else
-        clean_ica_excludes = True
+        clean_ica_excludes = False
         if(clean_ica_excludes):
+            print("removing excludes")
             ica.exclude = []
-            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)        
-                    
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)   
+              
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
@@ -325,7 +367,6 @@ clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
-        #print(ica_templates[n].exclude)
         #threshold=0.9
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
     icas.pop(0) # remove template.
@@ -339,24 +380,33 @@ for i, n in enumerate(icas):
     if p == 8:  p = 9
     if p == 10: p = 11
     b = 1 if  b == 8 else b
-
-    try:
-        #plot_overlay excludes, not n.exclude lel.
-        n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("Pid "+ str(p) +" block " +str(b)) )
-        n.exclude = n.labels_['exclude'] # do i need to do this again..? - i think so? plot overlay still plots it
-        # apparently this returns None??
-        
-    except Exception as e:
-        print("No ICs to exclude: \n", e)
     
-    #n_exclude = [0,1,2,3,4,5]
+    #print(p , " block ", b)
+
+    if 'exclude' in n.labels_:
+        #n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("p "+ str(p) +" block " +str(b)) )
+        
+        #add autodetected artifacts to exclude
+        if(pick_ic_auto):
+            for item in  n.labels_['exclude'] :
+                if item not in n.exclude:
+                    n.exclude.append(item)
+        else:
+            n.exclude = n.labels_['exclude']
+    else:
+        print("No templates selected \n")
+    
+    #n.exclude = []
+    #n.exclude = [0,1,2,3,4,5]
+    #print("Final ICAs to exclude are" ,n.exclude)
+    #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
     n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
-# TODO save preprocessed epochs        
-#raw.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
+# TODO save preprocessed epochs. (somewhere else)      
+#raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
     
 #%%
 pws_lst = list()
@@ -392,7 +442,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
             fig.set_constrained_layout(True)
             fig.suptitle("PID " + str(pid) + " block " + str(x))
             if(save_plots):
-                filepath = "../Plots/PID_" + str(pid) + "-Block_" + str(x)  + "-raw_psd_topo.png"
+                filepath = "./Plots/PID_" + str(pid) + "-Block_" + str(x)  + "-raw_psd_topo.png"
                 plt.savefig(filepath)
 
       
@@ -415,7 +465,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 spectrum = epochs.compute_psd(method = method, n_jobs=-1)
                 # average across epochs first
-                mean_spectrum = spectrum.average()
+                mean_spectrum = spectrum.average() # TODO whaaaaaaaaaaaaaaaaaaaaa?
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
         
                 # Normalize the PSDs ?
@@ -457,7 +507,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                     for ind, (label, band_def) in enumerate(bands):
 
                         # Create a topomap for the current oscillation band
-                        epochs.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', show_names=True, normalize=True, axes=axes[0, ind], show=False)
+                        epochs.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg',cmap='viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
                         
                         axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
                         
@@ -473,7 +523,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                     fig.set_constrained_layout(True)
                     
                     if(save_plots):
-                        filepath = "../Plots/PID_" + str(pid) + "-Block_" + str(x) + "-Group_" + str(grp_nr) + ".png"
+                        filepath = "./Plots/PID_" + str(pid) + "-Block_" + str(x) + "-Group_" + str(grp_nr) + ".png"
                         plt.savefig(filepath)
             
                 pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method])

@@ -1,17 +1,14 @@
 # %%
 import numpy as np
 import mne
-from mne.time_frequency import psd_multitaper, psd_welch
 import pandas as pd
-import pickle
 import tqdm 
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import seaborn as sns
 from pathlib import Path
 from itertools import chain, repeat
 from autoreject import get_rejection_threshold
-
+import autoreject
 
 # composite Simpson's rule
 from scipy.integrate import simpson
@@ -47,11 +44,17 @@ ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 s_freqs = 300
 
+epochs_tstep = 4.
+
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
  
 plot_plots = False       
 save_plots = False
 draw_plots = False
+
+pick_ic_auto = False
+TEST = False
+
 
 # bad channels
 # TODO fill for all participants and blocks :')
@@ -96,6 +99,10 @@ lstPIds = list(set(lstPIds))
 print(lstPIds)
 print(str(len(lstPIds)) + " subjects")
 
+if TEST:
+    lstPIds = [1, 2]
+    lstPIds = list(set(lstPIds))
+    NUM_BLOCKS = 2
 
 # %%
 arr_raws = []
@@ -154,12 +161,12 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             raw = mne.io.RawArray(samples, info)
             raw.drop_channels(['Time', 'BlockNumber'])
             
+            #remove power line interferance
+            raw.notch_filter(50., n_jobs=-1)
+            
             #high pass filter to remove slow drifts, 70 Hz low pass
             #raw.filter(.1, 70, None, fir_design='firwin')
-            raw.filter(1., 70, None, fir_design='firwin')
-
-            #remove power line interferance
-            raw.notch_filter(50, n_jobs=-1)
+            raw.filter(1., 70., None, fir_design='firwin')
             
             # set eeg reference
             raw.set_eeg_reference('average', projection=True)
@@ -203,18 +210,30 @@ for pid in tqdm.tqdm(lstPIds):
         #if(True):
             
             # independent component analysis (ICA)
-            #ica = mne.preprocessing.ICA(method="fastica", n_components=5, random_state=97, max_iter='auto')
-            ica = mne.preprocessing.ICA(method="infomax", random_state = 97, max_iter='auto')
+            ica = mne.preprocessing.ICA(method="infomax",random_state = 97)
             
             # make one second epochs for ICA fit
             # later aply to raw data
-            tstep = 4.
-            epochs = mne.make_fixed_length_epochs(raw, preload=True, duration = tstep)
-            reject = get_rejection_threshold(epochs, ch_types = 'eeg')
-            #print("The rejection dictionary is %s " %reject)
-            epochs.drop_bad(reject=reject) 
+            epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
+
+            local_autoreject = False
+            if local_autoreject:
+                ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
+                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
+                reject_log.plot('horizontal')
+                evoked_bad = epochs[reject_log.bad_epochs].average()
+                plt.figure()
+                plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
+                epochs_clean.average().plot(axes=plt.gca())
+                #epochs = epochs_clean
+                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
+            else : 
+                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
+                #print("The rejection dictionary is %s " %reject)
+                epochs.drop_bad(reject=reject)
+                ica.fit(epochs, tstep=epochs_tstep)
             
-            ica.fit(epochs, tstep=tstep)
+            #ica.plot_properties(epochs)
             #ica.fit(raw, reject=reject)
 
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
@@ -225,16 +244,17 @@ for pid in tqdm.tqdm(lstPIds):
             epochs = mne.read_epochs('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
             
         # Optionally autoreject muscle and eog artifacts
-        pick_ic_auto = False
         if (pick_ic_auto):
+            #start fresh, else find_bads_muscle fails
+            ica.exclude = []
             
             ica_z_thresh = 1.96
             eog_indices, eog_scores = ica.find_bads_eog(raw, 
                                                         ch_name=['F3', 'F4'], 
-                                                        threshold=3)
+                                                        threshold=ica_z_thresh)
             
             muscle_idx_auto = []
-            
+            #TODO make true again, just not with  this data...
             if(False):
                 muscle_idx_auto, scores = ica.find_bads_muscle(filt_raw)
                 ica.plot_scores(scores, exclude=muscle_idx_auto)
@@ -356,19 +376,22 @@ for i, n in enumerate(icas):
 
     # add excluded ICs from corrmap to ica.exclude
     if 'exclude' in n.labels_:
-        n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+        #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
         #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
-
+        
+        #add autodetected artifacts to exclude  
         if(pick_ic_auto):
             for item in  n.labels_['exclude'] :
                 if item not in ica.exclude:
                     ica.exclude.append(item)
         else:
             n.exclude = n.labels_['exclude']
+    else:
+        print("No templates selected \n")
             
     #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
-    print("excludes" ,n.exclude)
-    #n.exclude=[0,1,2,3,4,5]
+    #n.exclude=[0,1,2,3,4,5,6,7]
+    print("excludes",n.exclude)
     n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 

@@ -1,7 +1,6 @@
 # %%
 import os
 import mne
-import pickle
 import matplotlib.pyplot as plt
 
 # %%
@@ -17,9 +16,9 @@ while not done:
             epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(block) + '-epo.fif')
             epochs.load_data()
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif') 
+            ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
             ica.plot_sources(epochs, block = True)
             exclude_ic = ica.exclude
-            #ica.exclude = [] # avoid excluding it twice
             
             ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 119., title = str(pid) + '-' + str(block))
             
@@ -29,7 +28,6 @@ while not done:
                 try:
                     if accept == 'yes':
                         exclude_ic = ica.exclude
-                        #ica.exclude = [] # avoid excluding it twice
                         ica.save('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif', overwrite = True)
                         ica.save('./ica/'+ str(pid) + '-' + str (block) + '_template-ica.fif', overwrite = True)
                         
