@@ -1,25 +1,18 @@
 # %%
-import numpy as np
-import mne
-import pandas as pd
-import tqdm 
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
-from itertools import chain, repeat
-from autoreject import get_rejection_threshold
-import autoreject
-
-# composite Simpson's rule
-from scipy.integrate import simpson
-
-# Import some NeuroDSP functions to use with MNE
-from neurodsp.spectral import trim_spectrum
-
-# FOOOF imports
-from fooof.bands import Bands
-
 import os
+from itertools import chain, repeat
+from pathlib import Path
+
+import autoreject
+import matplotlib.pyplot as plt
+import mne
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import tqdm
+from autoreject import get_rejection_threshold
+from fooof.bands import Bands
+from scipy.integrate import simpson
 
 # %%
 mne.set_log_level(False)
