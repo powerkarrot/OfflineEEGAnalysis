@@ -250,6 +250,7 @@ for pid in tqdm.tqdm(lstPIds):
             ica.exclude = []
             #print(str(pid) + ' block ' + str(x))
             
+            #TODO check if actually EEG
             ica_z_thresh = 1.96
             eog_indices, eog_scores = ica.find_bads_eog(epochs, 
                                                         ch_name=['F3', 'F4'], 
