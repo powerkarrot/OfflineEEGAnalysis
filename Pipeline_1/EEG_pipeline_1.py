@@ -1,5 +1,6 @@
 # %%
 import os
+import pickle
 from itertools import chain, repeat
 from pathlib import Path
 
@@ -40,6 +41,8 @@ bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})
  
 epochs_tstep = 4.
 
+
+#%%
 #Script config
 plot_plots = False       
 save_plots = False
@@ -47,8 +50,6 @@ draw_plots = False
 pick_ic_auto = False
 
 TEST = False
-
-# %%
 
 # %%
 # bad channels
@@ -103,8 +104,8 @@ if TEST:
 
 dir_path = r'./fifs'
 Path('./fifs').mkdir(parents=True, exist_ok=True)
+Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
-Path('./ica/').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
@@ -249,6 +250,7 @@ for pid in tqdm.tqdm(lstPIds):
             ica.exclude = []
             #print(str(pid) + ' block ' + str(x))
             
+            #TODO check if actually EEG
             ica_z_thresh = 1.96
             eog_indices, eog_scores = ica.find_bads_eog(epochs, 
                                                         ch_name=['F3', 'F4'], 
@@ -552,6 +554,9 @@ f.suptitle("Welch Distribution")
 
 plt.show()
 
+# %%
+
+dfPowers.to_pickle('./pickles/dfPowers.pickle')
 
 
-
+# %%
