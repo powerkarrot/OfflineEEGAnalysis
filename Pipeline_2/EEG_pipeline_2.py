@@ -12,69 +12,12 @@ import seaborn as sns
 import tqdm
 from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
-import Settings
+from Settings import *
+from utils import get_user_input
 # %%
 mne.set_log_level(False)
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
-
-# %%
-def get_user_input(valid_response, prompt, err_prompt):
-    prompts = chain([prompt], repeat(err_prompt))
-    replies = map(input, prompts)
-    lowercased_replies = map(str.lower, replies)
-    stripped_replies = map(str.strip, lowercased_replies)
-    return next(filter(valid_response.__contains__, stripped_replies))
-
-
-# %%
-NUM_BLOCKS = Settings.NUM_BLOCKS
-
-channel_groups = Settings.channel_groups
-ch_names = Settings.ch_names
-ch_types = Settings.ch_types
-
-bands = Settings.bands
- 
-epochs_tstep = Settings.epochs_tstep 
-
-sfreq = Settings.sfreq
-
-#%%
-plot_plots = False       
-save_plots = False
-draw_plots = False
-
-pick_ic_auto = False
-TEST = False
-
-#%%
-# bad channels
-# TODO fill for all participants and blocks :')
-# Format: bads[pid][block]
-# example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
-
-bads = [[[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []]
-]
 
 #all ICAs to compute
 icas = []
@@ -426,13 +369,13 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         for grp_nr in range(len(channel_groups)):
 
 
-            mask = np.array(np.isin(Settings.channels,Settings.alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
-            excl = list(compress(Settings.channels, mask))
+            mask = np.array(np.isin(channels,alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
+            excl = list(compress(channels, mask))
             picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
                     stim=False)
             
-            mask1 = np.array(np.isin(Settings.channels,Settings.theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
-            excl1 = list(compress(Settings.channels, mask1))
+            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
+            excl1 = list(compress(channels, mask1))
             picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
                     stim=False)
                     

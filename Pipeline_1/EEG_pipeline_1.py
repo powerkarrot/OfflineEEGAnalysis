@@ -1,6 +1,6 @@
 # %%
 import os
-from itertools import chain, repeat, compress
+from itertools import compress
 from pathlib import Path
 
 import autoreject
@@ -12,74 +12,16 @@ import seaborn as sns
 import tqdm
 from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
-import Settings 
+from Settings import *
+from utils import *
 
 # %%
 mne.set_log_level(False)
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
 
-
 # %%
-def get_user_input(valid_response, prompt, err_prompt):
-    prompts = chain([prompt], repeat(err_prompt))
-    replies = map(input, prompts)
-    lowercased_replies = map(str.lower, replies)
-    stripped_replies = map(str.strip, lowercased_replies)
-    return next(filter(valid_response.__contains__, stripped_replies))
-
-# %%
-
-NUM_BLOCKS = Settings.NUM_BLOCKS
-
-channel_groups = Settings.channel_groups
-ch_names = Settings.ch_names
-ch_types = Settings.ch_types
-
-bands = Settings.bands
- 
-epochs_tstep = Settings.epochs_tstep
-
-#%%
-#Script config
-plot_plots = False       
-save_plots = False
-draw_plots = False
-pick_ic_auto = False
-
-TEST = False
-
-# %%
-# bad channels
-# TODO fill for all participants :')
-# Format: bads[pid][block]
-# example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
-
-bads = [[[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []]
-]
-
 icas = []
-
-# %%
 
 lstPIds = []
 path = "../Data/"
@@ -149,7 +91,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 df = pd.DataFrame(data)
                 # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-                sfreq = Settings.sfreq
                 info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
                 info.set_montage('standard_1020',  match_case=False)
 
@@ -404,13 +345,10 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 pws_lst = list()
 
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
-    # if (pid > 2):
-    #         break
     for x in range(1, NUM_BLOCKS+1):  
         
         #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
         epochs = clean_epochs[n][x-1] 
-
         #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
         
         # Average all epochs
@@ -440,19 +378,19 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
       
         ### Compute the power spectral density (PSD)
         
-        for grp_nr  in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
+        for grp_nr in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
             
             evoked = epochs.average() 
 
             picks = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False,
                     stim=False)
-            mask = np.array(np.isin(Settings.channels,Settings.alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
-            excl = list(compress(Settings.channels, mask))
+            mask = np.array(np.isin(channels, alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
+            excl = list(compress(channels, mask))
             picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
                     stim=False)
             
-            mask1 = np.array(np.isin(Settings.channels,Settings.theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
-            excl1 = list(compress(Settings.channels, mask1))
+            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
+            excl1 = list(compress(channels, mask1))
             picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
                     stim=False)
                                 
@@ -474,13 +412,10 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
                 # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                
                 # #convert to DB
                 psdsDB_alpha = 10 * np.log10(psds_alpha)
-
                 #Mean of all channels
                 psds_mean_alpha = psds_alpha.mean(0)
-            
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
@@ -488,13 +423,10 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 # average across epochs first
                 mean_spectrum_theta = spectrum_theta.average()  
                 psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
-        
                 # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                
                 # #convert to DB
                 psdsDB_theta = 10 * np.log10(psds_theta)
-
                 #Mean of all channels
                 psds_mean_theta = psds_theta.mean(0)
                 freq_res_theta = freqs_theta[1] - freqs_theta[0]
