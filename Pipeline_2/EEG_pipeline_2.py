@@ -1,6 +1,6 @@
 # %%
 import os
-from itertools import chain, repeat
+from itertools import chain, repeat, compress
 from pathlib import Path
 
 import autoreject
@@ -11,70 +11,13 @@ import pandas as pd
 import seaborn as sns
 import tqdm
 from autoreject import get_rejection_threshold
-from fooof.bands import Bands
 from scipy.integrate import simpson
-
+from Settings import *
+from utils import get_user_input
 # %%
 mne.set_log_level(False)
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
-
-# %%
-def get_user_input(valid_response, prompt, err_prompt):
-    prompts = chain([prompt], repeat(err_prompt))
-    replies = map(input, prompts)
-    lowercased_replies = map(str.lower, replies)
-    stripped_replies = map(str.strip, lowercased_replies)
-    return next(filter(valid_response.__contains__, stripped_replies))
-
-
-# %%
-NUM_BLOCKS = 7
-
-channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3','C3','P3','P4','C4','F4','Pz']]
-ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
-ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
-
-s_freqs = 300
-
-epochs_tstep = 4.
-
-bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
- 
-plot_plots = False       
-save_plots = False
-draw_plots = False
-
-pick_ic_auto = False
-TEST = False
-
-
-# bad channels
-# TODO fill for all participants and blocks :')
-# Format: bads[pid][block]
-# example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
-
-bads = [[[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []],
-        [[], [], [], [], [], [],  []]
-]
 
 #all ICAs to compute
 icas = []
@@ -137,15 +80,10 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
 
         for x in range(1, NUM_BLOCKS+1):  
             
-            # if(x > 2):
-            #     continue
-            
             # Prepare data 
             data = dfAll.loc[dfAll['BlockNumber'] == x]
             df = pd.DataFrame(data)
-            # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-            sfreq=300 # i really think its 300 -.-
             info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
             info.set_montage('standard_1020',  match_case=False)
 
@@ -248,7 +186,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             muscle_idx_auto = []
             #TODO make true again, just not with  this data...
-            if(False):
+            if(True):
                 muscle_idx_auto, scores = ica.find_bads_muscle(filt_raw)
                 ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
@@ -379,12 +317,12 @@ for i, n in enumerate(icas):
                     ica.exclude.append(item)
         else:
             n.exclude = n.labels_['exclude']
-    else:
-        print("No templates selected \n")
+    # else:
+    #     print("No templates selected \n")
             
     #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
     #n.exclude=[0,1,2,3,4,5,6,7]
-    print("excludes",n.exclude)
+    #print("excludes",n.exclude)
     n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
@@ -400,14 +338,10 @@ for i in range(len(lstPIds)):
 
 pws_lst = list()
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
-    # if pid != 1:
-    #     continue
-    # if (pid > 2):
-    #     break
     
     for x in range(1,NUM_BLOCKS+1):
+        
         raw = clean_raws[n][x-1]
-        #raw = raw_dict[str(pid)+'-'+ str(x)]
 
         #plot alpha and theta 
         if(plot_plots):
@@ -431,44 +365,49 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 plt.savefig(filepath)
  
         ### Compute the power spectral density (PSD)
-        
-        group1 = raw.copy().pick_channels(['F3', 'F4'])
-        group2 = raw.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
-        group3 = raw.copy().pick_channels(['P3', 'Pz', 'P4'])
-        
-        raw_groups = [group1, group2, group3, raw.copy()]
-        
-        for grp_nr, raw_group in enumerate(raw_groups):
-            raw = raw_group 
+                
+        for grp_nr in range(len(channel_groups)):
 
-            picks = mne.pick_types(raw.info, meg=False, eeg=True, eog=False,
+
+            mask = np.array(np.isin(channels,alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
+            excl = list(compress(channels, mask))
+            picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
+                    stim=False)
+            
+            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
+            excl1 = list(compress(channels, mask1))
+            picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
                     stim=False)
                     
             methods = ['multitaper', 'welch']
     
             for m, method in enumerate(methods):
                 
-                spectrum = raw.compute_psd(method= method)
+                n_jobs = -1 if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus
+
+                spectrum = raw.copy().compute_psd(method= method, n_jobs=n_jobs)
                 psds, freqs = spectrum.get_data(return_freqs=True)
-                
-                # Normalize the PSDs ?
-                #psds /= np.sum(psds, axis=-1, keepdims=True)
-                
-                # convert to dB
-                #psds = 10 * np.log10(psds)
-                
-                #Mean of all channels
                 psds_mean = psds.mean(0)
-            
                 freq_res = freqs[1] - freqs[0]
                 
+                spectrum_alpha = raw.copy().compute_psd(method= method, n_jobs=n_jobs, picks=picks_alpha)
+                psds_alpha, freqs_alpha = spectrum_alpha.get_data(return_freqs=True)
+                psds_mean_alpha = psds_alpha.mean(0)
+                freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
+                
+                spectrum_theta = raw.copy().compute_psd(method= method, n_jobs=n_jobs, picks=picks_theta)
+                psds_theta, freqs_theta = spectrum_theta.get_data(return_freqs=True)
+                psds_mean_theta = psds_theta.mean(0)
+                freq_res_theta = freqs_theta[1] - freqs_theta[0]
+                
+                
                 # Find intersecting values in frequency vector
-                idx_alpha = np.logical_and(freqs >= bands.alpha[0], freqs <= bands.alpha[1])
-                idx_theta = np.logical_and(freqs >= bands.theta[0], freqs <= bands.theta[1])      
+                idx_alpha = np.logical_and(freqs_alpha >= bands.alpha[0], freqs_alpha <= bands.alpha[1])
+                idx_theta = np.logical_and(freqs_theta >= bands.theta[0], freqs_theta <= bands.theta[1])      
             
                 # absolute power
-                bp_alpha = simpson(psds_mean[idx_alpha], dx=freq_res)
-                bp_theta = simpson(psds_mean[idx_theta], dx=freq_res) 
+                bp_alpha = simpson(psds_mean_alpha[idx_alpha], dx=freq_res_alpha)
+                bp_theta = simpson(psds_mean_theta[idx_theta], dx=freq_res_theta) 
                 bp_total = simpson(psds_mean, dx=freq_res)
                 
                 # relative power
@@ -479,8 +418,8 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 alpha_theta_rel = bp_alpha_rel / bp_theta_rel       
                 
                 #peak power at freq
-                peak_alpha = freqs[np.argmax(psds_mean[idx_alpha])]
-                peak_theta = freqs[np.argmax(psds_mean[idx_theta])]
+                peak_alpha = freqs_alpha[np.argmax(psds_mean_alpha[idx_alpha])]
+                peak_theta = freqs_theta[np.argmax(psds_mean_theta[idx_theta])]
 
                 # Extract the power values from the detected peaks
                 # Plot the topographies across different frequency bands
@@ -520,26 +459,31 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
 # %%
 
-f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
-dfPowers = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'AlphaPow', 'DeltaPow', 'AlphaTheta', 'Group', 'Method'])
-ys = ['AlphaPow', 'DeltaPow', 'AlphaTheta']
+n_ch_grps = len(channel_groups)
+calc_powers = ['Alpha', 'Theta', 'Alpha/Theta']
 
-for y in range(4):
-    for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'multitaper')], ax=axes[y,i],showfliers=False)
-        #sns.stripplot(x="BlockNumber", y = ys[i], data=dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[y,i])
-        axes[y,i].set_title( str(ys[i]) + " Group " + str(channel_groups[y]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+f, axes = plt.subplots(n_ch_grps, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
+dfPowers = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'Alpha', 'Theta', 'Alpha/Theta', 'Group', 'Method'])
+ax_idx = 1 if len(axes) > 1 else 0
+
+for ch_grp in range(n_ch_grps):
+    for calc_power, ax1 in enumerate(axes[ax_idx]):
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'multitaper')], ax=axes[ch_grp,calc_power],showfliers=False)
+        sns.stripplot(x="BlockNumber", y = calc_powers[calc_power], data=dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[ch_grp,calc_power])
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " + str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Multitaper Distribution")
 
-f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
-for y in range(4):
-    for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'welch')], ax=axes[y,i],showfliers=False)
-        axes[y,i].set_title( str(ys[i]) + " Group " +  str(channel_groups[y]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+f, axes = plt.subplots(n_ch_grps, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
+ax_idx = 1 if len(axes) > 1 else 0
+
+for ch_grp in range(n_ch_grps):
+    for calc_power, ax1 in enumerate(axes[ax_idx]):
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'welch')], ax=axes[ch_grp,calc_power],showfliers=False)
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " +  str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Welch Distribution")
 
 plt.show()

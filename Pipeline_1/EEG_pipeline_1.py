@@ -1,7 +1,6 @@
 # %%
 import os
-import pickle
-from itertools import chain, repeat
+from itertools import compress
 from pathlib import Path
 
 import autoreject
@@ -12,76 +11,17 @@ import pandas as pd
 import seaborn as sns
 import tqdm
 from autoreject import get_rejection_threshold
-from fooof.bands import Bands
 from scipy.integrate import simpson
+from Settings import *
+from utils import *
 
 # %%
 mne.set_log_level(False)
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
 
-
 # %%
-def get_user_input(valid_response, prompt, err_prompt):
-    prompts = chain([prompt], repeat(err_prompt))
-    replies = map(input, prompts)
-    lowercased_replies = map(str.lower, replies)
-    stripped_replies = map(str.strip, lowercased_replies)
-    return next(filter(valid_response.__contains__, stripped_replies))
-
-# %%
-
-NUM_BLOCKS = 7
-
-channel_groups =[['F3', 'F4'],['F3', 'F4', 'C3', 'C4'],['P3', 'Pz', 'P4'],['F3','C3','P3','P4','C4','F4','Pz']]
-ch_names = ['Time', 'F3','C3','P3','P4','C4','F4','Pz', 'BlockNumber']
-ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
-
-bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
- 
-epochs_tstep = 4.
-
-
-#%%
-#Script config
-plot_plots = False       
-save_plots = False
-draw_plots = False
-pick_ic_auto = False
-
-TEST = False
-
-# %%
-# bad channels
-# TODO fill for all participants :')
-# Format: bads[pid][block]
-# example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
-
-bads = [[[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []],
-        [[], [], [], [], [], [], []]
-]
-
 icas = []
-
-# %%
 
 lstPIds = []
 path = "../Data/"
@@ -151,7 +91,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 df = pd.DataFrame(data)
                 # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
-                sfreq=300
                 info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
                 info.set_montage('standard_1020',  match_case=False)
 
@@ -387,8 +326,8 @@ for i, n in enumerate(icas):
                     n.exclude.append(item)
         else:
             n.exclude = n.labels_['exclude']
-    else:
-        print("No templates selected \n")
+    # else:
+    #     print("No templates selected \n")
     
     #n.exclude = []
     #n.exclude = [0,1,2,3,4,5]
@@ -406,13 +345,10 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 pws_lst = list()
 
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
-    # if (pid > 2):
-    #         break
     for x in range(1, NUM_BLOCKS+1):  
         
         #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
         epochs = clean_epochs[n][x-1] 
-
         #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
         
         # Average all epochs
@@ -441,45 +377,67 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
       
         ### Compute the power spectral density (PSD)
-        group1 = epochs.copy().pick_channels(['F3', 'F4'])
-        group2 = epochs.copy().pick_channels(['F3', 'F4', 'C3', 'C4'])
-        group3 = epochs.copy().pick_channels(['P3', 'Pz', 'P4'])
         
-        raw_groups = [group1, group2, group3, epochs.copy()]
-        
-        for grp_nr, epochs in enumerate(raw_groups):
+        for grp_nr in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
+            
             evoked = epochs.average() 
 
             picks = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False,
                     stim=False)
-                    
+            mask = np.array(np.isin(channels, alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
+            excl = list(compress(channels, mask))
+            picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
+                    stim=False)
+            
+            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
+            excl1 = list(compress(channels, mask1))
+            picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
+                    stim=False)
+                                
             methods = ['multitaper', 'welch']
     
             for m, method in enumerate(methods):
                 
-                spectrum = epochs.compute_psd(method = method, n_jobs=-1)
+                spectrum = epochs.copy().compute_psd(method = method, n_jobs=-1)
                 # average across epochs first
-                mean_spectrum = spectrum.average() # TODO whaaaaaaaaaaaaaaaaaaaaa?
+                mean_spectrum = spectrum.average() 
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
-        
-                # Normalize the PSDs ?
-                # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                
-                # #convert to DB
-                psdsDB = 10 * np.log10(psds)
-
-                #Mean of all channels
                 psds_mean = psds.mean(0)
-            
                 freq_res = freqs[1] - freqs[0]
                 
+                ## ALPHA
+                spectrum_alpha = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_alpha)
+                # average across epochs first
+                mean_spectrum_alpha = spectrum_alpha.average() 
+                psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
+                # Normalize the PSDs ?
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
+                # #convert to DB
+                psdsDB_alpha = 10 * np.log10(psds_alpha)
+                #Mean of all channels
+                psds_mean_alpha = psds_alpha.mean(0)
+                freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
+                
+                #THETA
+                spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_theta)
+                # average across epochs first
+                mean_spectrum_theta = spectrum_theta.average()  
+                psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
+                # Normalize the PSDs ?
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
+                # #convert to DB
+                psdsDB_theta = 10 * np.log10(psds_theta)
+                #Mean of all channels
+                psds_mean_theta = psds_theta.mean(0)
+                freq_res_theta = freqs_theta[1] - freqs_theta[0]
+                
                 # Find intersecting values in frequency vector
-                idx_alpha = np.logical_and(freqs >= bands.alpha[0], freqs <= bands.alpha[1])
-                idx_theta = np.logical_and(freqs >= bands.theta[0], freqs <= bands.theta[1])      
+                idx_alpha = np.logical_and(freqs_alpha >= bands.alpha[0], freqs_alpha <= bands.alpha[1])
+                idx_theta = np.logical_and(freqs_theta >= bands.theta[0], freqs_theta <= bands.theta[1])      
             
                 # absolute power
-                bp_alpha = simpson(psds_mean[idx_alpha], dx=freq_res)
-                bp_theta = simpson(psds_mean[idx_theta], dx=freq_res) 
+                bp_alpha = simpson(psds_mean_alpha[idx_alpha], dx=freq_res_alpha)
+                bp_theta = simpson(psds_mean_theta[idx_theta], dx=freq_res_theta) 
                 bp_total = simpson(psds_mean, dx=freq_res)
                 
                 # relative power
@@ -490,8 +448,8 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 alpha_theta_rel = bp_alpha_rel / bp_theta_rel       
                 
                 #peak power at freq
-                peak_alpha = freqs[np.argmax(psds_mean[idx_alpha])]
-                peak_theta = freqs[np.argmax(psds_mean[idx_theta])]
+                peak_alpha = freqs_alpha[np.argmax(psds_mean_alpha[idx_alpha])]
+                peak_theta = freqs_theta[np.argmax(psds_mean_theta[idx_theta])]
 
                 # Extract the power values from the detected peaks
                 # Plot the topographies across different frequency bands                         
@@ -529,27 +487,31 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
 
 # %%
+n_ch = len(channel_groups)
+calc_powers = ['Alpha', 'Theta', 'Alpha/Theta']
 
-f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
-dfPowers  = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'AlphaPow', 'DeltaPow', 'AlphaTheta', 'Group', 'Method'])
-ys = ['AlphaPow', 'DeltaPow', 'AlphaTheta']
+f, axes = plt.subplots(n_ch, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
+dfPowers  = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'Alpha', 'Theta', 'Alpha/Theta', 'Group', 'Method'])
 
-for y in range(4):
-    for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'multitaper')], ax=axes[y,i],showfliers=False)
+#TODO channel_groups will be 2D array dont forget. check channel_groups[i][y] of smth link that
+ax_idx = 1 if len(axes) > 1 else 0
+for ch_grp in range(n_ch):
+    for calc_power, ax1 in enumerate(axes[ax_idx]): # up to 3
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'multitaper')], ax=axes[ch_grp,calc_power],showfliers=False)
         #sns.stripplot(x="BlockNumber", y = ys[i], data=dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[y,i])
-        axes[y,i].set_title( str(ys[i]) + " Group " + str(channel_groups[y]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " + str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Multitaper Distribution")
 
-f, axes = plt.subplots(4, 3, figsize=(15,6), constrained_layout=True)
-for y in range(4):
-    for i, ax1 in enumerate(axes[1]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'welch')], ax=axes[y,i],showfliers=False)
-        axes[y,i].set_title( str(ys[i]) + " Group " +  str(channel_groups[y]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+f, axes = plt.subplots(n_ch, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
+ax_idx = 1 if len(axes) > 1 else 0
+for ch_grp in range(n_ch):
+    for calc_power, ax1 in enumerate(axes[ax_idx]):
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'welch')], ax=axes[ch_grp,calc_power],showfliers=False)
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " +  str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Welch Distribution")
 
 plt.show()
