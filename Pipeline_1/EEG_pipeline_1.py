@@ -556,30 +556,30 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
 # %%
 n_ch = len(channel_groups)
+calc_powers = ['Alpha', 'Theta', 'Alpha/Theta']
 
-f, axes = plt.subplots(n_ch, 3, figsize=(15,6), constrained_layout=True, squeeze=False)
+f, axes = plt.subplots(n_ch, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
 dfPowers  = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'Alpha', 'Theta', 'Alpha/Theta', 'Group', 'Method'])
-ys = ['Alpha', 'Theta', 'Alpha/Theta']
 
 #TODO channel_groups will be 2D array dont forget. check channel_groups[i][y] of smth link that
 ax_idx = 1 if len(axes) > 1 else 0
-for y in range(n_ch):
-    for i, ax1 in enumerate(axes[ax_idx]): # up to 3
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'multitaper')], ax=axes[y,i],showfliers=False)
+for ch_grp in range(n_ch):
+    for calc_power, ax1 in enumerate(axes[ax_idx]): # up to 3
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'multitaper')], ax=axes[ch_grp,calc_power],showfliers=False)
         #sns.stripplot(x="BlockNumber", y = ys[i], data=dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'Multitaper')], marker="o", alpha=0.3, color="black", ax=axes[y,i])
-        axes[y,i].set_title( str(ys[i]) + " Group " + str(channel_groups[y][i]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " + str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Multitaper Distribution")
 
-f, axes = plt.subplots(n_ch, 3, figsize=(15,6), constrained_layout=True, squeeze=False)
+f, axes = plt.subplots(n_ch, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
 ax_idx = 1 if len(axes) > 1 else 0
-for y in range(n_ch):
-    for i, ax1 in enumerate(axes[ax_idx]):
-        sns.boxplot(x = "BlockNumber", y = ys[i], data = dfPowers.loc[(dfPowers['Group'] == y) & (dfPowers['Method'] == 'welch')], ax=axes[y,i],showfliers=False)
-        axes[y,i].set_title( str(ys[i]) + " Group " +  str(channel_groups[y][i]), fontsize=10)
-        axes[y,i].set_ylabel('Power', fontsize=7)
-        axes[y,i].set_xlabel('Block', fontsize=7)
+for ch_grp in range(n_ch):
+    for calc_power, ax1 in enumerate(axes[ax_idx]):
+        sns.boxplot(x = "BlockNumber", y = calc_powers[calc_power], data = dfPowers.loc[(dfPowers['Group'] == ch_grp) & (dfPowers['Method'] == 'welch')], ax=axes[ch_grp,calc_power],showfliers=False)
+        axes[ch_grp,calc_power].set_title( str(calc_powers[calc_power]) + " Group " +  str(channel_groups[ch_grp][calc_power]), fontsize=10)
+        axes[ch_grp,calc_power].set_ylabel('Power', fontsize=7)
+        axes[ch_grp,calc_power].set_xlabel('Block', fontsize=7)
 f.suptitle("Welch Distribution")
 
 plt.show()
