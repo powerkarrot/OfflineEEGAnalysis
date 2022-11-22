@@ -14,6 +14,8 @@ from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
 from Settings import *
 from utils import *
+import time
+import datetime
 
 # %%
 mne.set_log_level(False)
@@ -71,6 +73,8 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
 
             dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
             
+            dffeedback = pd.read_csv(f"{path}ID{pid}-feedback.csv")
+            
             dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
             dfAll = dfAll.sort_values(by="Time") # inplace?
             
@@ -80,6 +84,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             dfAll = dfAll.dropna()
 
             for x in range(1, NUM_BLOCKS+1):  
+                print("pid "  , pid, "block", x)
                 
                 # if(x > 1):
                 #     break
@@ -89,7 +94,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                         
                 data = dfAll.loc[dfAll['BlockNumber'] == x]
                 df = pd.DataFrame(data)
-                # data.plot(x="Time", y=["F3", "C3","P3","P3","C4","F4","Pz"])
 
                 info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
                 info.set_montage('standard_1020',  match_case=False)
@@ -121,7 +125,56 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 # raw.plot_psd()
                 
                 # Create equal length epochs of 4 seconds
-                epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
+                #epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
+                #create Annotations:
+                dffeedbackBlock = dffeedback.loc[(dffeedback['CurrentBlock'] == x)]
+                new_row = pd.DataFrame({'Time':float(dfAll['Time'].loc[(dfAll['BlockNumber']==x)].iloc[0])}, index =[0]) # first ball. kill me. my soul is dead.
+                dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)
+
+                # spawns = dffeedbackBlock['Time'].values
+                #spawns = [time.mktime(datetime.datetime.fromtimestamp(x).timetuple()) for x in spawns]                
+                
+                spawn_diff1 = dffeedbackBlock['Time'].diff(periods=1)
+                
+                spawn_diff1.dropna(inplace=True)
+                
+                #NOTE for now im attempting to start from second ball drop since i have no idea when first ball drop happened
+                #delete from here
+                #TODO log first ball drop in the future to avoid this mindfuck and delete this section
+                sampling_freq = raw.info['sfreq']
+                start_stop_seconds = np.array([spawn_diff1[1], spawn_diff1[len(spawn_diff1)-1]])
+                start_sample, stop_sample = (start_stop_seconds * sampling_freq).astype(int)
+                
+                channel_index = 0
+                selection = raw[channel_index, start_sample:stop_sample]
+                
+                spawn_diff1 = spawn_diff1.iloc[1:]
+                #NOTE:remove until here later
+                
+                spawn_diff = np.cumsum(spawn_diff1)
+                #print("diff is ", spawn_diff)
+                meas_date = raw.info['meas_date']
+
+                times = np.full_like(spawn_diff, .6)       
+                
+                spawn_annot = mne.Annotations(onset=spawn_diff,
+                            duration=times,
+                            description=['spawn'] * len(spawn_diff))
+            
+                raw.set_annotations(spawn_annot)
+                #print(raw.annotations.onset)
+                #print(raw.annotations)
+                (events, event_dict) = mne.events_from_annotations(raw)
+                #print ("events", events)
+                                
+                #print(mne.find_events(raw))
+                #baseline = (None, 0)  # means from the first instant to t = 0
+                picks = mne.pick_types(raw.info, eeg=True)
+                tmin = 0.0  # start of each epoch
+                tmax = 1.  # end of each epoch (500ms after the trigger)
+                
+                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = tmin, tmax=tmax, event_repeated='merge', baseline=None,
+                    preload=True)
                 
                 #evoked.plot_joint(picks='eeg')
                 #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
@@ -134,6 +187,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 #epochs.average().plot()                 
                 
                 #arr_epochs.append(epochs)
+                #sys.exit("Error message")
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
 
@@ -398,15 +452,18 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     
             for m, method in enumerate(methods):
                 
-                spectrum = epochs.copy().compute_psd(method = method, n_jobs=-1)
+                njobs = 2 if method == 'welch' else -1
+
+                spectrum = epochs.copy().compute_psd(method = method,n_jobs = njobs)
                 # average across epochs first
                 mean_spectrum = spectrum.average() 
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
                 psds_mean = psds.mean(0)
                 freq_res = freqs[1] - freqs[0]
                 
+                
                 ## ALPHA
-                spectrum_alpha = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_alpha)
+                spectrum_alpha = epochs.copy().compute_psd(method = method,  n_jobs = njobs, picks=picks_alpha)
                 # average across epochs first
                 mean_spectrum_alpha = spectrum_alpha.average() 
                 psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
@@ -419,7 +476,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
-                spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_theta)
+                spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs = njobs, picks=picks_theta)
                 # average across epochs first
                 mean_spectrum_theta = spectrum_theta.average()  
                 psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
