@@ -5,6 +5,8 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 pick_ic_auto = False
+pick_ic_as_template = False
+
 TEST = False
 
 

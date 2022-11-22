@@ -139,7 +139,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
 
 # %%
 exclude_ic = [] # TODO sure its here?
-pick_ic_as_template = True
 action = None
 
 for pid in tqdm.tqdm(lstPIds):
@@ -147,9 +146,10 @@ for pid in tqdm.tqdm(lstPIds):
     if action == 'no':
         pick_ic_as_template = False
     else:
-        action = get_user_input(valid_response={'no', 'yes'},
-                    prompt="Select ICs for ICE corrmap? - yes | no", 
-                    err_prompt="Type  \"yes\" or \"no\": \n")
+        if pick_ic_as_template:
+            action = get_user_input(valid_response={'no', 'yes'},
+                        prompt="Select ICs for ICE corrmap? - yes | no", 
+                        err_prompt="Type  \"yes\" or \"no\": \n")
         
         if action == 'no':
             pick_ic_as_template = False
