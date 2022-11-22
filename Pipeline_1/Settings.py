@@ -18,14 +18,15 @@ ch_names = ['Time', 'FCz','Pz','P3','P4','PO7','PO8','Oz', 'BlockNumber']
 ch_types = ['misc', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg', 'eeg',  'misc']
 
 channels = ['FCz','Pz','P3','P4','PO7','PO8','Oz']
-alpha_ch_groups = [['Pz','P3','P4','PO7','PO8'],['FCz','Oz','PO8'], ['FCz','Pz','P3','P4','PO7','PO8','Oz'] ]
-theta_ch_groups = [['FCz','Pz'], ['FCz','Pz'], ['FCz','Pz','P3','P4','PO7','PO8','Oz']]
+alpha_ch_groups = [['Pz','P3','P4','PO7','PO8'],['FCz','Oz','PO8'],  ['FCz','Pz'],['FCz','Pz','P3','P4','PO7','PO8','Oz'] ]
+theta_ch_groups = [['FCz','Pz'], ['FCz','Pz'], ['FCz','Pz'], ['FCz','Pz','P3','P4','PO7','PO8','Oz']]
 
 assert(len(alpha_ch_groups) == len(theta_ch_groups))
 
 channel_groups = [[alpha_ch_groups[0], theta_ch_groups[0], [[alpha_ch_groups[0], theta_ch_groups[0]]]], # fix this third thing
-                  [alpha_ch_groups[1], theta_ch_groups[1], [[alpha_ch_groups[0], theta_ch_groups[0]]]],
-                  [alpha_ch_groups[2], theta_ch_groups[2], [[alpha_ch_groups[0], theta_ch_groups[0]]]],
+                  [alpha_ch_groups[1], theta_ch_groups[1], [[alpha_ch_groups[1], theta_ch_groups[1]]]],
+                  [alpha_ch_groups[2], theta_ch_groups[2], [[alpha_ch_groups[2], theta_ch_groups[2]]]],
+                  [alpha_ch_groups[3], theta_ch_groups[3], [[alpha_ch_groups[3], theta_ch_groups[3]]]],
                  ]  
 
 # bad channels
