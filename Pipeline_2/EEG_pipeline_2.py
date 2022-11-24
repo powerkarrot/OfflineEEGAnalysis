@@ -367,20 +367,16 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         ### Compute the power spectral density (PSD)
                 
         for grp_nr in range(len(channel_groups)):
-
-
+            
+            # Channel groups to exclude
             mask = np.array(np.isin(channels,alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
             excl = list(compress(channels, mask))
-            picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
-                    stim=False)
+            picks_alpha = mne.pick_types(epochs.info,eeg=True, exclude=excl)
             
             mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
             excl1 = list(compress(channels, mask1))
-            picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
-                    stim=False)
-                    
-            methods = ['multitaper', 'welch']
-    
+            picks_theta = mne.pick_types(epochs.info,eeg=True, exclude=excl1)
+                
             for m, method in enumerate(methods):
                 
                 n_jobs = -1 if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus

@@ -397,27 +397,21 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         
         for grp_nr in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
             
-            evoked = epochs.average() 
-
-            picks = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False,
-                    stim=False)
+            picks = mne.pick_types(epochs.info, eeg=True)
+            
             mask = np.array(np.isin(channels, alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
             excl = list(compress(channels, mask))
-            picks_alpha = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl,
-                    stim=False)
+            picks_alpha = mne.pick_types(epochs.info, eeg=True,  exclude=excl)
             
             mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
             excl1 = list(compress(channels, mask1))
-            picks_theta = mne.pick_types(epochs.info, meg=False, eeg=True, eog=False, exclude=excl1,
-                    stim=False)
-                                
-            methods = ['multitaper', 'welch']
-    
+            picks_theta = mne.pick_types(epochs.info, eeg=True, exclude=excl1)
+                                    
             for m, method in enumerate(methods):
                 
                 njobs = 2 if method == 'welch' else -1
 
-                spectrum = epochs.copy().compute_psd(method = method,n_jobs = njobs)
+                spectrum = epochs.copy().compute_psd(method = method,n_jobs = njobs, picks=picks)
                 # average across epochs first
                 mean_spectrum = spectrum.average() 
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
