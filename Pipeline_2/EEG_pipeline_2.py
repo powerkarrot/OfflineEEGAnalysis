@@ -187,7 +187,7 @@ for pid in tqdm.tqdm(lstPIds):
             muscle_idx_auto = []
             #TODO make true again, just not with  this data...
             if(True):
-                muscle_idx_auto, scores = ica.find_bads_muscle(filt_raw)
+                muscle_idx_auto, scores = ica.find_bads_muscle(raw)
                 ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
                 ica.exclude = eog_indices
@@ -308,7 +308,6 @@ for i, n in enumerate(icas):
     # add excluded ICs from corrmap to ica.exclude
     if 'exclude' in n.labels_:
         #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
-        #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)))
         
         #add autodetected artifacts to exclude  
         if(pick_ic_auto):

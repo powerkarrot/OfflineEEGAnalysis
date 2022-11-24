@@ -194,18 +194,18 @@ for pid in tqdm.tqdm(lstPIds):
             eog_indices, eog_scores = ica.find_bads_eog(epochs, 
                                                         ch_name=['F3', 'F4'], 
                                                         threshold=ica_z_thresh)
-            #print(f'Automatically found eye artifact ICA components: {eog_indices}')
+            print(f'Automatically found eye artifact ICA components: {eog_indices}')
 
             # ica.plot_scores(eog_scores)  
             # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
             muscle_idx_auto = []
             
             #TODO make true again, just not with  this data...
-            if(False):
+            if(True):
                 muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
-                #print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
+                print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
                 #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
             
             for item in muscle_idx_auto + eog_indices :
@@ -349,7 +349,6 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         
         #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
         epochs = clean_epochs[n][x-1] 
-        #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
         
         # Average all epochs
         evoked = epochs.average()     
@@ -477,7 +476,6 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 pws_lst.append([pid, x, bp_alpha, bp_theta, alpha_theta_total, grp_nr, method])
                    
         if(draw_plots):
-
             plt.show()
 
 
