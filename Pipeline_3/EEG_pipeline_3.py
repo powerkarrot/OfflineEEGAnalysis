@@ -55,14 +55,8 @@ arr_epochs = []
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
-        
-        # if (pid != 1):
-        #    continue
-        # if (pid > 2):
-        #         break
-        if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
-        #if True:
 
+        if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
         
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
@@ -85,10 +79,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
 
             for x in range(1, NUM_BLOCKS+1):  
                 print("pid "  , pid, "block", x)
-                
-                # if(x > 1):
-                #     break
-                
+      
                 # Prepare data 
                 # see if fif already present, else filter / clean data and save it
                         
@@ -112,82 +103,45 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 # set EEG reference
                 raw.set_eeg_reference('average', projection=True)
                 #raw.set_eeg_reference(ref_channels=['Pz'])
-                
 
                 # Visual inspection of bad channels
                 # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
                 raw.info['bads'] =  bads[pid-1][x-1]
                 if raw.info['bads']:
                     raw.interpolate_bads()
-                
-                #raw.plot(scalings='20e+4')
-                # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-                # raw.plot_psd()
-                
-                # Create equal length epochs of 4 seconds
-                #epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
-                #create Annotations:
+            
+                # Create Annotations:
                 dffeedbackBlock = dffeedback.loc[(dffeedback['CurrentBlock'] == x)]
                 new_row = pd.DataFrame({'Time':float(dfAll['Time'].loc[(dfAll['BlockNumber']==x)].iloc[0])}, index =[0]) # first ball. kill me. my soul is dead.
-                dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)
-
-                # spawns = dffeedbackBlock['Time'].values
-                #spawns = [time.mktime(datetime.datetime.fromtimestamp(x).timetuple()) for x in spawns]                
-                
+                dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
                 spawn_diff1 = dffeedbackBlock['Time'].diff(periods=1)
-                
                 spawn_diff1.dropna(inplace=True)
-                
-                #NOTE for now im attempting to start from second ball drop since i have no idea when first ball drop happened
-                #delete from here
-                #TODO log first ball drop in the future to avoid this mindfuck and delete this section
-                sampling_freq = raw.info['sfreq']
-                start_stop_seconds = np.array([spawn_diff1[1], spawn_diff1[len(spawn_diff1)-1]])
-                start_sample, stop_sample = (start_stop_seconds * sampling_freq).astype(int)
-                
-                channel_index = 0
-                selection = raw[channel_index, start_sample:stop_sample]
-                
-                spawn_diff1 = spawn_diff1.iloc[1:]
-                #NOTE:remove until here later
-                
+                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as its guesswork                               
                 spawn_diff = np.cumsum(spawn_diff1)
-                #print("diff is ", spawn_diff)
-                meas_date = raw.info['meas_date']
-
-                times = np.full_like(spawn_diff, .6)       
+                times = np.full_like(spawn_diff, .1)       
                 
                 spawn_annot = mne.Annotations(onset=spawn_diff,
                             duration=times,
                             description=['spawn'] * len(spawn_diff))
-            
                 raw.set_annotations(spawn_annot)
-                #print(raw.annotations.onset)
-                #print(raw.annotations)
+                
+                # Create events
                 (events, event_dict) = mne.events_from_annotations(raw)
-                #print ("events", events)
-                                
-                #print(mne.find_events(raw))
-                #baseline = (None, 0)  # means from the first instant to t = 0
+                
+                # Create epochs                
                 picks = mne.pick_types(raw.info, eeg=True)
-                tmin = 0.0  # start of each epoch
-                tmax = 1.  # end of each epoch (500ms after the trigger)
-                
-                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = tmin, tmax=tmax, event_repeated='merge', baseline=None,
-                    preload=True)
-                
-                #evoked.plot_joint(picks='eeg')
-                #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
-                
+                tmin = -0.2  # start of each epoch 2ms before ball drop
+                tmax = 1.  # end of each epoch 1s after ball drop
+                baseline = (None, 0)
+                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = tmin, tmax=tmax, event_repeated='merge',
+                    baseline=None, preload=True)
+                                
                 # Global autoreject based on rejection threshold
                 reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
                 #print("The rejection dictionary is %s " %reject)
                 epochs.drop_bad(reject=reject)
-                #epochs.plot_drop_log()
-                #epochs.average().plot()                 
-                
+
                 #arr_epochs.append(epochs)
-                #sys.exit("Error message")
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
 
@@ -246,20 +200,20 @@ for pid in tqdm.tqdm(lstPIds):
             #TODO check if actually EEG
             ica_z_thresh = 1.96
             eog_indices, eog_scores = ica.find_bads_eog(epochs, 
-                                                        ch_name=['F3', 'F4'], 
+                                                        ch_name=['FCz'], 
                                                         threshold=ica_z_thresh)
-            #print(f'Automatically found eye artifact ICA components: {eog_indices}')
+            print(f'Automatically found eye artifact ICA components: {eog_indices}')
 
             # ica.plot_scores(eog_scores)  
             # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
             muscle_idx_auto = []
             
             #TODO make true again, just not with  this data...
-            if(False):
+            if(True):
                 muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
-                #print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
+                print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
                 #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
             
             for item in muscle_idx_auto + eog_indices :
@@ -270,6 +224,7 @@ for pid in tqdm.tqdm(lstPIds):
             #ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x) )
 
         # Pick templates
+        #TODO: remove this, ic_selection.py is kinda enough
         if(pick_ic_as_template):
             done = False
             while not done:
@@ -396,6 +351,9 @@ clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 #raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
     
 #%%
+
+
+#%%
 pws_lst = list()
 
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
@@ -404,10 +362,17 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
         epochs = clean_epochs[n][x-1] 
         #epochs = arr_epochs[((x-1)*len(lstPIds)) + pid]
+        evoked = epochs.average()
+
+        noise_cov = mne.compute_covariance(epochs, tmax=0., method='shrunk', rank=None,
+                                   verbose='error')
+
+        ball_drop = epochs['spawn'].average()
         
-        # Average all epochs
-        evoked = epochs.average()     
-           
+        ts_args = dict(gfp=True, time_unit='s', spatial_colors=True)
+        ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
+        #evoked.plot_white(noise_cov=noise_cov, time_unit='s') 
+                       
         #Plot alpha and theta PSD
         if(plot_plots):
     
