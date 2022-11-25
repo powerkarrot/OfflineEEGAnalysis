@@ -43,12 +43,13 @@ if TEST:
 # %%
 
 dir_path = r'./fifs'
-Path('./fifs').mkdir(parents=True, exist_ok=True)
+Path('./fifs/ica').mkdir(parents=True, exist_ok=True)
 Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
+arr_ica_epochs = []
 
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                            
@@ -128,19 +129,27 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 
                 # Create epochs                
                 picks = mne.pick_types(raw.info, eeg=True)
-                tmin = -0.2  # start of each epoch 2ms before ball drop
-                tmax = 1.  # end of each epoch 1s after ball drop
                 baseline = (None, 0)
-                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = tmin, tmax=tmax, event_repeated='merge',
+                epochs_ica = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
                     baseline=None, preload=True)
+                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
+                    baseline=baseline, preload=True)
                                 
                 # Global autoreject based on rejection threshold
-                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
+                reject_ica = get_rejection_threshold(epochs_ica, ch_types = 'eeg', verbose=False)
+                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
                 #print("The rejection dictionary is %s " %reject)
+
+                #reject['eeg'] *= threshold_multiplier
                 epochs.drop_bad(reject=reject)
+                epochs_ica.drop_bad(reject=reject_ica)
+
+                #epochs.plot_drop_log()
 
                 #arr_epochs.append(epochs)
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
+                epochs_ica.save('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', overwrite = True)
+
 
 
 # %%
@@ -162,8 +171,9 @@ for pid in tqdm.tqdm(lstPIds):
                 
     for x in range(1, NUM_BLOCKS+1):  
         
-        epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
-        
+        epochs_ica = mne.read_epochs('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', preload=True)
+        epochs = mne.read_epochs('./fifs/' + str(p) + '-' + str(b) + '-epo.fif', preload=True)
+
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             # independent component analysis (ICA)
@@ -174,15 +184,15 @@ for pid in tqdm.tqdm(lstPIds):
             local_autoreject = False
             if local_autoreject:
                 ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
+                epochs_clean, reject_log = ar.fit_transform(epochs_ica, return_log=True) 
                 reject_log.plot('horizontal')
-                evoked_bad = epochs[reject_log.bad_epochs].average()
+                evoked_bad = epochs_ica[reject_log.bad_epochs].average()
                 plt.figure()
                 plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
                 epochs_clean.average().plot(axes=plt.gca())
-                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
+                ica.fit(epochs_ica[~reject_log.bad_epochs], tstep = epochs_tstep)
 
-            ica.fit(epochs)
+            ica.fit(epochs_ica)
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
@@ -195,7 +205,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO check if actually EEG
             ica_z_thresh = 1.96
-            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
+            eog_indices, eog_scores = ica.find_bads_eog(epochs_ica, 
                                                         ch_name=['FCz'], 
                                                         threshold=ica_z_thresh)
             print(f'Automatically found eye artifact ICA components: {eog_indices}')
@@ -205,7 +215,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO make true again, just not with  this data...
             if(True):
-                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
+                muscle_idx_auto, scores = ica.find_bads_muscle(epochs_ica)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
                 print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
@@ -223,11 +233,11 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
-                ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 360. )
+                ica.plot_properties(epochs_ica, dB= True, log_scale= True, psd_args={'fmax':70})
+                ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
                 ics_old = ica.exclude
 
-                ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+                ica.plot_overlay(epochs_ica.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
 
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
@@ -278,7 +288,9 @@ for pid in tqdm.tqdm(lstPIds):
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
+        arr_ica_epochs.append(epochs_ica)
         arr_epochs.append(epochs)
+
         # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
     
  
@@ -327,16 +339,15 @@ for i, n in enumerate(icas):
 
     #print("Final ICAs to exclude are" ,n.exclude)
     #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
-    n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+    
+    
+    arr_epochs[i] = n.apply(arr_ica_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 
 # TODO save preprocessed epochs. (somewhere else)      
 #raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
     
-#%%
-
-
 #%%
 pws_lst = list()
 

@@ -5,7 +5,11 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 pick_ic_auto = False
-pick_ic_as_template = False
+pick_ic_as_template = True
+threshold_multiplier = .000001
+
+epochs_tmin = -0.2
+epochs_tmax = 1.
 
 TEST = False
 
