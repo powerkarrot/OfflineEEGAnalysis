@@ -53,15 +53,8 @@ arr_epochs = []
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
-        
-        # if (pid != 1):
-        #    continue
-        # if (pid > 2):
-        #         break
-        if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
-        #if True:
 
-        
+        if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
                 
@@ -109,29 +102,20 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 raw.set_eeg_reference('average', projection=True)
                 #raw.set_eeg_reference(ref_channels=['Pz'])
                 
-
                 # Visual inspection of bad channels
                 # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
                 raw.info['bads'] =  bads[pid-1][x-1]
                 if raw.info['bads']:
                     raw.interpolate_bads()
-                
-                #raw.plot(scalings='20e+4')
-                # raw.plot( scalings='20e-4', n_channels = 7, lowpass=bands.alpha[0], highpass=bands.alpha[1])
-                # raw.plot_psd()
-                
+   
                 # Create equal length epochs of 4 seconds
                 epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
-                
-                #evoked.plot_joint(picks='eeg')
-                #evoked.plot_topomap(times=[0., 10., 20., 30., 90.], ch_type='eeg')
                 
                 # Global autoreject based on rejection threshold
                 reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
                 #print("The rejection dictionary is %s " %reject)
                 epochs.drop_bad(reject=reject)
                 #epochs.plot_drop_log()
-                #epochs.average().plot()                 
                 
                 #arr_epochs.append(epochs)
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
@@ -158,10 +142,9 @@ for pid in tqdm.tqdm(lstPIds):
         
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
         
-        # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
-            # independent component analysis (ICA)
             
+            # independent component analysis (ICA)
             ica = mne.preprocessing.ICA(method="fastica",  random_state=97)
             
             #TODO decide later. if yes, dont forget to redo it after ica apply
@@ -197,16 +180,13 @@ for pid in tqdm.tqdm(lstPIds):
             print(f'Automatically found eye artifact ICA components: {eog_indices}')
 
             # ica.plot_scores(eog_scores)  
-            # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
             muscle_idx_auto = []
             
             #TODO make true again, just not with  this data...
             if(True):
                 muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
-                
                 print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
-                #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
             
             for item in muscle_idx_auto + eog_indices :
                 if item not in ica.exclude:
@@ -329,14 +309,11 @@ for i, n in enumerate(icas):
     # else:
     #     print("No templates selected \n")
     
-    #n.exclude = []
-    #n.exclude = [0,1,2,3,4,5]
     #print("Final ICAs to exclude are" ,n.exclude)
     #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
     n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
-#clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
 # TODO save preprocessed epochs. (somewhere else)      
 #raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
@@ -394,7 +371,6 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
             for m, method in enumerate(methods):
                 
                 spectrum = epochs.copy().compute_psd(method = method, n_jobs=-1)
-                # average across epochs first
                 mean_spectrum = spectrum.average() 
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
                 psds_mean = psds.mean(0)
@@ -402,27 +378,19 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 ## ALPHA
                 spectrum_alpha = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_alpha)
-                # average across epochs first
                 mean_spectrum_alpha = spectrum_alpha.average() 
                 psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
-                # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                # #convert to DB
                 psdsDB_alpha = 10 * np.log10(psds_alpha)
-                #Mean of all channels
                 psds_mean_alpha = psds_alpha.mean(0)
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
                 spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs=-1, picks=picks_theta)
-                # average across epochs first
                 mean_spectrum_theta = spectrum_theta.average()  
                 psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
-                # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                # #convert to DB
                 psdsDB_theta = 10 * np.log10(psds_theta)
-                #Mean of all channels
                 psds_mean_theta = psds_theta.mean(0)
                 freq_res_theta = freqs_theta[1] - freqs_theta[0]
                 
@@ -445,9 +413,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 #peak power at freq
                 peak_alpha = freqs_alpha[np.argmax(psds_mean_alpha[idx_alpha])]
                 peak_theta = freqs_theta[np.argmax(psds_mean_theta[idx_theta])]
-
-                # Extract the power values from the detected peaks
-                # Plot the topographies across different frequency bands                         
+                     
                 if(plot_plots):
 
                     fig, axes = plt.subplots(2, 2, figsize=(7, 3))

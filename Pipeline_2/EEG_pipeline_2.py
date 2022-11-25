@@ -47,6 +47,7 @@ dir_path = r'./fifs/'
 
 Path(dir_path).mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
+Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./ica/epochs').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./Plots/NoICA').mkdir(parents=True, exist_ok=True)
@@ -54,11 +55,6 @@ Path('./Plots/NoICA').mkdir(parents=True, exist_ok=True)
 
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
-
-        # if (pid != 16):
-        #     continue
-        # if (pid > 2):
-        #         break
 
         dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
         dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
@@ -96,7 +92,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             raw.notch_filter(50., n_jobs=-1)
             
             #high pass filter to remove slow drifts, 70 Hz low pass
-            #raw.filter(.1, 70, None, fir_design='firwin')
             raw.filter(1., 70., None, fir_design='firwin')
             
             # set eeg reference
@@ -136,7 +131,6 @@ for pid in tqdm.tqdm(lstPIds):
         raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', preload=True)
           
         # independent component analysis (ICA)                
-        # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
         #if(True):
             
@@ -144,7 +138,7 @@ for pid in tqdm.tqdm(lstPIds):
             ica = mne.preprocessing.ICA(method="infomax",random_state = 97)
             
             # make one second epochs for ICA fit
-            # later aply to raw data
+            # later apply to raw data
             epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
 
             local_autoreject = False
@@ -163,10 +157,7 @@ for pid in tqdm.tqdm(lstPIds):
                 #print("The rejection dictionary is %s " %reject)
                 epochs.drop_bad(reject=reject)
                 ica.fit(epochs, tstep=epochs_tstep)
-            
-            #ica.plot_properties(epochs)
-            #ica.fit(raw, reject=reject)
-
+        
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             epochs.save('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
           
@@ -207,19 +198,12 @@ for pid in tqdm.tqdm(lstPIds):
         # Optionally pick templates for corrmap
         if(pick_ic_as_template):                
             done = False
-            #raw.load_data()
-            #epochs.load_data()
             
             while not done: 
                 
                 #ica.plot_properties(epochs, dB=True, log_scale= True, psd_args={'fmax':70})
                 ica.plot_properties(epochs, dB=True, log_scale= True)
-
                 ica.plot_sources(raw, block = True, title = str(pid) + '-' + str(x) )
-            
-                #exclude_ic = ica.exclude
-                #ica.exclude = [] # avoid excluding it twice. or i guess not? i has no idea.
-            
                 ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', title = str(pid) + '-' + str(x), start = 20., stop=360. )
         
                 while True:
@@ -259,9 +243,6 @@ for pid in tqdm.tqdm(lstPIds):
         if(clean_ica_excludes):
             ica.exclude = []
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-            
-        #TODO maybe do a size check before appending    
-        # save the ICAs for the corrmap 
 
         icas.append(ica)
         arr_raws.append(raw)
@@ -270,14 +251,11 @@ for pid in tqdm.tqdm(lstPIds):
 
 
  #%%
-#clean_raws = np.zeros((2, 2),dtype=object)
 ica_templates = []
 
 dir_path = r'./ica/'
 for path in os.scandir(dir_path):
     if path.is_file():
-        #count += 1
-        #print(path.name)
         ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
         if(ica_template.exclude != []):           
             ica_templates.append(ica_template)
@@ -306,8 +284,7 @@ for i, n in enumerate(icas):
     b = 1 if  b == 8 else b
 
     # add excluded ICs from corrmap to ica.exclude
-    if 'exclude' in n.labels_:
-        #n.plot_overlay(arr_raws[i], n.labels_['exclude'], picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
+    if 'exclude' in n.labels_:        
         
         #add autodetected artifacts to exclude  
         if(pick_ic_auto):
@@ -320,8 +297,6 @@ for i, n in enumerate(icas):
     #     print("No templates selected \n")
             
     #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
-    #n.exclude=[0,1,2,3,4,5,6,7]
-    #print("excludes",n.exclude)
     n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
@@ -415,9 +390,6 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 #peak power at freq
                 peak_alpha = freqs_alpha[np.argmax(psds_mean_alpha[idx_alpha])]
                 peak_theta = freqs_theta[np.argmax(psds_mean_theta[idx_theta])]
-
-                # Extract the power values from the detected peaks
-                # Plot the topographies across different frequency bands
                 
                 if(plot_plots):
 
@@ -483,6 +455,8 @@ f.suptitle("Welch Distribution")
 
 plt.show()
 
+# %%
 
+dfPowers.to_pickle('./pickles/dfPowers.pickle')
 
 

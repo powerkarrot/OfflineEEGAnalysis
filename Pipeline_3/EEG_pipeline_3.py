@@ -14,8 +14,6 @@ from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
 from Settings import *
 from utils import *
-import time
-import datetime
 
 # %%
 mne.set_log_level(False)
@@ -182,7 +180,6 @@ for pid in tqdm.tqdm(lstPIds):
                 plt.figure()
                 plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
                 epochs_clean.average().plot(axes=plt.gca())
-                #epochs = epochs_clean
                 ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
 
             ica.fit(epochs)
@@ -195,7 +192,6 @@ for pid in tqdm.tqdm(lstPIds):
         if (pick_ic_auto):
             #start fresh, else find_bads_muscle fails
             ica.exclude = []
-            #print(str(pid) + ' block ' + str(x))
             
             #TODO check if actually EEG
             ica_z_thresh = 1.96
@@ -205,7 +201,6 @@ for pid in tqdm.tqdm(lstPIds):
             print(f'Automatically found eye artifact ICA components: {eog_indices}')
 
             # ica.plot_scores(eog_scores)  
-            # ica.plot_overlay(epochs, exclude=eog_indices, picks='eeg', title = str(pid) + '-' + str(x) )
             muscle_idx_auto = []
             
             #TODO make true again, just not with  this data...
@@ -214,7 +209,6 @@ for pid in tqdm.tqdm(lstPIds):
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
                 print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
-                #ica.plot_overlay(epochs.average(), exclude=muscle_idx_auto, picks='eeg', title = str(pid) + '-' + str(x))
             
             for item in muscle_idx_auto + eog_indices :
                 if item not in ica.exclude:
@@ -296,8 +290,6 @@ ica_excludes = []
 dir_path = r'./ica/'
 for path in os.scandir(dir_path):
     if path.is_file():
-        #count += 1
-        #print(path.name)
         ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
         if(ica_template.exclude != []):           
             ica_templates.append(ica_template)
@@ -309,7 +301,6 @@ clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 for n, ic_templ in enumerate(ica_templates):
     icas.insert(0,ic_templ) #set template
     for x, excl in enumerate(ica_templates[n].exclude):
-        #threshold=0.9
         mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
     icas.pop(0) # remove template.
     
@@ -323,11 +314,7 @@ for i, n in enumerate(icas):
     if p == 10: p = 11
     b = 1 if  b == 8 else b
     
-    #print(p , " block ", b)
-
-    if 'exclude' in n.labels_:
-        #n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("p "+ str(p) +" block " +str(b)) )
-        
+    if 'exclude' in n.labels_:        
         #add autodetected artifacts to exclude
         if(pick_ic_auto):
             for item in  n.labels_['exclude'] :
@@ -337,15 +324,12 @@ for i, n in enumerate(icas):
             n.exclude = n.labels_['exclude']
     # else:
     #     print("No templates selected \n")
-    
-    #n.exclude = []
-    #n.exclude = [0,1,2,3,4,5]
+
     #print("Final ICAs to exclude are" ,n.exclude)
     #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
     n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
-#clean_epochs = np.reshape(arr_epochs, (2,2)) # for testing only
 
 # TODO save preprocessed epochs. (somewhere else)      
 #raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
@@ -421,27 +405,19 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 ## ALPHA
                 spectrum_alpha = epochs.copy().compute_psd(method = method,  n_jobs = njobs, picks=picks_alpha)
-                # average across epochs first
                 mean_spectrum_alpha = spectrum_alpha.average() 
                 psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
-                # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                # #convert to DB
                 psdsDB_alpha = 10 * np.log10(psds_alpha)
-                #Mean of all channels
                 psds_mean_alpha = psds_alpha.mean(0)
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
                 spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs = njobs, picks=picks_theta)
-                # average across epochs first
                 mean_spectrum_theta = spectrum_theta.average()  
                 psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
-                # Normalize the PSDs ?
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                # #convert to DB
                 psdsDB_theta = 10 * np.log10(psds_theta)
-                #Mean of all channels
                 psds_mean_theta = psds_theta.mean(0)
                 freq_res_theta = freqs_theta[1] - freqs_theta[0]
                 
