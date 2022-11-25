@@ -51,7 +51,7 @@ Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 arr_epochs = []
 arr_ica_epochs = []
 
-if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
+if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
 
@@ -115,7 +115,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
                 spawn_diff1 = dffeedbackBlock['Time'].diff(periods=1)
                 spawn_diff1.dropna(inplace=True)
-                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as its guesswork                               
+                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
                 spawn_diff = np.cumsum(spawn_diff1)
                 times = np.full_like(spawn_diff, .1)       
                 
@@ -172,7 +172,7 @@ for pid in tqdm.tqdm(lstPIds):
     for x in range(1, NUM_BLOCKS+1):  
         
         epochs_ica = mne.read_epochs('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', preload=True)
-        epochs = mne.read_epochs('./fifs/' + str(p) + '-' + str(b) + '-epo.fif', preload=True)
+        epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
 
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
