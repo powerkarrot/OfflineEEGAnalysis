@@ -2,6 +2,7 @@
 import os
 import mne
 import matplotlib.pyplot as plt
+import utils
 
 # %%
 
@@ -9,7 +10,7 @@ action = None
 done = False
 
 while not done:
-        action = input("Type pid and blocknumber or esc to exit")
+        action = input("<pid> <blocknumber>")
         pid = action.split()[0]
         block = action.split()[1]
         try:
@@ -24,7 +25,8 @@ while not done:
             
             while True:
                 #TODO User input validation? Who cares!
-                accept = input("Accept? - yes | esc")
+                #accept = input("Accept? - yes | esc")
+                accept = utils.get_user_input('yes | esc', 'Accept', "LEARN HOW TO READ AND TYPE")
                 try:
                     if accept == 'yes':
                         exclude_ic = ica.exclude
