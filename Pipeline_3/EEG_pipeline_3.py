@@ -50,8 +50,7 @@ Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
 arr_ica_epochs = []
-
-if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
+if get_num_files(dir_path) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
 
@@ -298,9 +297,9 @@ if preprocess or len(os.listdir('./fifs/clean/')) != NUM_BLOCKS * len(lstPIds):
 
     clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
-    for n, ic_templ in enumerate(ica_templates):
+    for i, ic_templ in enumerate(ica_templates):
         icas.insert(0,ic_templ) #set template
-        for x, excl in enumerate(ica_templates[n].exclude):
+        for x, excl in enumerate(ica_templates[i].exclude):
             mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
         icas.pop(0) # remove template.
         
