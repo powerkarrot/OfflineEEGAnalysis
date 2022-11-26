@@ -57,21 +57,20 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
 
         dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
-        dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
             
         dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
-        dfEEG = dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"})
+        dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"}, inplace=True)
         dfEEG.drop("TimeLsl", axis =1, inplace=True)
 
         dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
 
         dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
-        dfAll = dfAll.sort_values(by="Time") # inplace?
+        dfAll.sort_values(by="Time", inplace=True)
 
         dfAll = dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"] )
         dfAll.fillna(method='ffill', inplace=True)
-        dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
-        dfAll = dfAll.dropna()
+        dfAll.drop(dfAll[dfAll.BlockNumber < 0].index, inplace=True)
+        dfAll.dropna(inplace=True)
             
 
         for x in range(1, NUM_BLOCKS+1):  
