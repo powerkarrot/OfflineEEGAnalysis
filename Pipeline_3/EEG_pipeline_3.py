@@ -351,7 +351,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         #Test plot
         ball_drop = epochs['spawn'].average()
         ts_args = dict(gfp=True, time_unit='s', spatial_colors=True)
-        #ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
+        ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
         # noise_cov = mne.compute_covariance(epochs, tmax=0., method='shrunk', rank=None,
         #                     verbose='error')
         #evoked.plot_white(noise_cov=noise_cov, time_unit='s') 
