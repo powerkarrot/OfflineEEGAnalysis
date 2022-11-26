@@ -43,14 +43,16 @@ if TEST:
 # %%
 
 dir_path = r'./fifs'
-Path('./fifs').mkdir(parents=True, exist_ok=True)
+Path('./fifs/ica').mkdir(parents=True, exist_ok=True)
+Path('./fifs/clean').mkdir(parents=True, exist_ok=True)
 Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
+arr_ica_epochs = []
 
-if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
+if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
                            
     for pid in tqdm.tqdm(lstPIds):
 
@@ -114,7 +116,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
                 spawn_diff1 = dffeedbackBlock['Time'].diff(periods=1)
                 spawn_diff1.dropna(inplace=True)
-                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as its guesswork                               
+                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
                 spawn_diff = np.cumsum(spawn_diff1)
                 times = np.full_like(spawn_diff, .1)       
                 
@@ -128,19 +130,30 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 
                 # Create epochs                
                 picks = mne.pick_types(raw.info, eeg=True)
-                tmin = -0.2  # start of each epoch 2ms before ball drop
-                tmax = 1.  # end of each epoch 1s after ball drop
                 baseline = (None, 0)
-                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = tmin, tmax=tmax, event_repeated='merge',
+                epochs_ica = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
                     baseline=None, preload=True)
+                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
+                    baseline=baseline, preload=True)
+                
+                del(raw)
                                 
                 # Global autoreject based on rejection threshold
-                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
+                reject_ica = get_rejection_threshold(epochs_ica, ch_types = 'eeg', verbose=False)
+                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
                 #print("The rejection dictionary is %s " %reject)
+
+                #reject['eeg'] *= threshold_multiplier
                 epochs.drop_bad(reject=reject)
+                epochs_ica.drop_bad(reject=reject_ica)
+
+                #epochs.plot_drop_log()
 
                 #arr_epochs.append(epochs)
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
+                epochs_ica.save('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', overwrite = True)
+
+                del(dfState, dffeedback, dffeedbackBlock, dfEEG, dfAll)
 
 
 # %%
@@ -162,8 +175,9 @@ for pid in tqdm.tqdm(lstPIds):
                 
     for x in range(1, NUM_BLOCKS+1):  
         
+        epochs_ica = mne.read_epochs('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', preload=True)
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
-        
+
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             # independent component analysis (ICA)
@@ -174,15 +188,15 @@ for pid in tqdm.tqdm(lstPIds):
             local_autoreject = False
             if local_autoreject:
                 ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
+                epochs_clean, reject_log = ar.fit_transform(epochs_ica, return_log=True) 
                 reject_log.plot('horizontal')
-                evoked_bad = epochs[reject_log.bad_epochs].average()
+                evoked_bad = epochs_ica[reject_log.bad_epochs].average()
                 plt.figure()
                 plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
                 epochs_clean.average().plot(axes=plt.gca())
-                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
+                ica.fit(epochs_ica[~reject_log.bad_epochs], tstep = epochs_tstep)
 
-            ica.fit(epochs)
+            ica.fit(epochs_ica)
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
@@ -195,7 +209,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO check if actually EEG
             ica_z_thresh = 1.96
-            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
+            eog_indices, eog_scores = ica.find_bads_eog(epochs_ica, 
                                                         ch_name=['FCz'], 
                                                         threshold=ica_z_thresh)
             print(f'Automatically found eye artifact ICA components: {eog_indices}')
@@ -205,7 +219,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO make true again, just not with  this data...
             if(True):
-                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
+                muscle_idx_auto, scores = ica.find_bads_muscle(epochs_ica)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
                 print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
@@ -223,11 +237,11 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
-                ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 360. )
+                ica.plot_properties(epochs_ica, dB= True, log_scale= True, psd_args={'fmax':70})
+                ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
                 ics_old = ica.exclude
 
-                ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+                ica.plot_overlay(epochs_ica.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
 
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
@@ -278,84 +292,99 @@ for pid in tqdm.tqdm(lstPIds):
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
-        arr_epochs.append(epochs)
-        # epochs.save("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
-    
+        arr_ica_epochs.append(epochs_ica)
+        arr_epochs.append(epochs)    
  
  # %%
-ica_templates = []
-ica_excludes = []
 
-#count = 0
-dir_path = r'./ica/'
-for path in os.scandir(dir_path):
-    if path.is_file():
-        ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
-        if(ica_template.exclude != []):           
-            ica_templates.append(ica_template)
-        else:
-            os.remove(dir_path + path.name)
- 
-clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
+if preprocess or len(os.listdir('./fifs/clean/')) != NUM_BLOCKS * len(lstPIds):
 
-for n, ic_templ in enumerate(ica_templates):
-    icas.insert(0,ic_templ) #set template
-    for x, excl in enumerate(ica_templates[n].exclude):
-        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
-    icas.pop(0) # remove template.
+    ica_templates = []
+    ica_excludes = []
+
+    #count = 0
+    dir_path = r'./ica/'
+    for path in os.scandir(dir_path):
+        if path.is_file():
+            ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
+            if(ica_template.exclude != []):           
+                ica_templates.append(ica_template)
+            else:
+                os.remove(dir_path + path.name)
+
+    clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
+
+    for n, ic_templ in enumerate(ica_templates):
+        icas.insert(0,ic_templ) #set template
+        for x, excl in enumerate(ica_templates[n].exclude):
+            mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
+        icas.pop(0) # remove template.
+        
+    p = 0
+    b = 0
+    for i, ica in enumerate(icas):
+        b += 1
+        p = p + 1 if i % 7 == 0 else p
+        if p == 4: p = 5
+        if p == 8:  p = 9
+        if p == 10: p = 11
+        b = 1 if  b == 8 else b
+        
+        if 'exclude' in ica.labels_:        
+            #add autodetected artifacts to exclude
+            if(pick_ic_auto):
+                for item in  ica.labels_['exclude'] :
+                    if item not in ica.exclude:
+                        ica.exclude.append(item)
+            else:
+                ica.exclude = ica.labels_['exclude']
+        # else:
+        #     print("No templates selected \n")
+
+        #print(p, " ", b, ": Final ICAs to exclude are" ,n.exclude)
+        #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
+        
+        ica.apply(arr_ica_epochs[i]) # TODO at least i hope so, double check indices. 
+        arr_epochs[i].save('./fifs/clean/' + str(p) + '-' + str(b) + '-epo.fif', overwrite = True)
+
+    clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
+    del(ica_templates)
     
-p = 0
-b = 0
-for i, n in enumerate(icas):
-    b += 1
-    p = p + 1 if i % 7 == 0 else p
-    if p == 4: p = 5
-    if p == 8:  p = 9
-    if p == 10: p = 11
-    b = 1 if  b == 8 else b
-    
-    if 'exclude' in n.labels_:        
-        #add autodetected artifacts to exclude
-        if(pick_ic_auto):
-            for item in  n.labels_['exclude'] :
-                if item not in n.exclude:
-                    n.exclude.append(item)
-        else:
-            n.exclude = n.labels_['exclude']
-    # else:
-    #     print("No templates selected \n")
+del(arr_epochs, arr_ica_epochs)
 
-    #print("Final ICAs to exclude are" ,n.exclude)
-    #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
-    n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
-
-clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
-
-# TODO save preprocessed epochs. (somewhere else)      
-#raw.save("./ica/pipeline_1/raw/"+str(p)+"_"+str(x)+".fif")
-    
 #%%
-
-
-#%%
-pws_lst = list()
-
+# ERP test
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     for x in range(1, NUM_BLOCKS+1):  
         
-        #epochs = mne.io.read_raw_fif("./ica/pipeline_1/raw/"+str(pid)+"_"+str(x)+".fif")
-        epochs = clean_epochs[n][x-1] 
+        if preprocess: epochs = clean_epochs[n][x-1] 
+        else: epochs = mne.read_epochs('./fifs/clean/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
+        
+        #epochs = clean_epochs[n][x-1]
+     
         evoked = epochs.average()
 
         #Test plot
         ball_drop = epochs['spawn'].average()
         ts_args = dict(gfp=True, time_unit='s', spatial_colors=True)
-        ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
+        #ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
         # noise_cov = mne.compute_covariance(epochs, tmax=0., method='shrunk', rank=None,
         #                     verbose='error')
         #evoked.plot_white(noise_cov=noise_cov, time_unit='s') 
-                       
-        #Plot alpha and theta PSD
+                           
+#%%
+
+# Compute powers
+pws_lst = list()
+
+for n, pid in enumerate(tqdm.tqdm(lstPIds)):
+    for x in range(1, NUM_BLOCKS+1):  
+        
+        if preprocess: epochs = clean_epochs[n][x-1] 
+        else: epochs = mne.read_epochs('./fifs/clean/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
+        #epochs = clean_epochs[n][x-1] 
+        evoked = epochs.average()
+        
         if(plot_plots):
     
             fig = plt.figure( figsize=(7, 3))
@@ -395,7 +424,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 njobs = 2 if method == 'welch' else -1
 
-                spectrum = epochs.copy().compute_psd(method = method,n_jobs = njobs, picks=picks)
+                spectrum = epochs.compute_psd(method = method,n_jobs = njobs, picks=picks)
                 # average across epochs first
                 mean_spectrum = spectrum.average() 
                 psds, freqs = mean_spectrum.get_data(return_freqs=True)
@@ -404,7 +433,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 
                 ## ALPHA
-                spectrum_alpha = epochs.copy().compute_psd(method = method,  n_jobs = njobs, picks=picks_alpha)
+                spectrum_alpha = epochs.compute_psd(method = method,  n_jobs = njobs, picks=picks_alpha)
                 mean_spectrum_alpha = spectrum_alpha.average() 
                 psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
@@ -413,7 +442,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
-                spectrum_theta = epochs.copy().compute_psd(method = method, n_jobs = njobs, picks=picks_theta)
+                spectrum_theta = epochs.compute_psd(method = method, n_jobs = njobs, picks=picks_theta)
                 mean_spectrum_theta = spectrum_theta.average()  
                 psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
                 # psds /= np.sum(psds, axis=-1, keepdims=True) 
@@ -474,7 +503,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
             plt.show()
 
-
+if preprocess: del(clean_epochs)
 
 # %%
 n_ch = len(channel_groups)
@@ -510,5 +539,3 @@ plt.show()
 
 dfPowers.to_pickle('./pickles/dfPowers.pickle')
 
-
-# %%
