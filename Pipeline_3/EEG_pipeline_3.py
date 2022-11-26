@@ -44,7 +44,6 @@ if TEST:
 
 dir_path = r'./fifs'
 Path('./fifs/ica').mkdir(parents=True, exist_ok=True)
-Path('./fifs/clean').mkdir(parents=True, exist_ok=True)
 Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
@@ -128,30 +127,24 @@ if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
                 
                 # Create epochs                
                 picks = mne.pick_types(raw.info, eeg=True)
-                baseline = (None, 0)
-                epochs_ica = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
-                    baseline=None, preload=True)
                 epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
-                    baseline=baseline, preload=True)
+                    baseline=None, preload=True)
                 
                 del(raw)
                                 
                 # Global autoreject based on rejection threshold
-                reject_ica = get_rejection_threshold(epochs_ica, ch_types = 'eeg', verbose=False)
                 reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
                 #print("The rejection dictionary is %s " %reject)
 
                 #reject['eeg'] *= threshold_multiplier
                 epochs.drop_bad(reject=reject)
-                epochs_ica.drop_bad(reject=reject_ica)
 
                 #epochs.plot_drop_log()
 
                 #arr_epochs.append(epochs)
                 epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
-                epochs_ica.save('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', overwrite = True)
 
-                del(dfState, dffeedback, dffeedbackBlock, dfEEG, dfAll)
+            del(dfState, dffeedback, dffeedbackBlock, dfEEG, dfAll)
 
 
 # %%
@@ -173,9 +166,7 @@ for pid in tqdm.tqdm(lstPIds):
                 
     for x in range(1, NUM_BLOCKS+1):  
         
-        epochs_ica = mne.read_epochs('./fifs/ica/' + str(pid) + '-' + str(x) + '_ica-epo.fif', preload=True)
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
-
         # should probably delete contents first but hey
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             # independent component analysis (ICA)
@@ -186,15 +177,15 @@ for pid in tqdm.tqdm(lstPIds):
             local_autoreject = False
             if local_autoreject:
                 ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-                epochs_clean, reject_log = ar.fit_transform(epochs_ica, return_log=True) 
+                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
                 reject_log.plot('horizontal')
-                evoked_bad = epochs_ica[reject_log.bad_epochs].average()
+                evoked_bad = epochs[reject_log.bad_epochs].average()
                 plt.figure()
                 plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
                 epochs_clean.average().plot(axes=plt.gca())
-                ica.fit(epochs_ica[~reject_log.bad_epochs], tstep = epochs_tstep)
+                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
 
-            ica.fit(epochs_ica)
+            ica.fit(epochs)
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
@@ -208,7 +199,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO check if actually EEG
             ica_z_thresh = 1.96
-            eog_indices, eog_scores = ica.find_bads_eog(epochs_ica, 
+            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
                                                         ch_name=['FCz'], 
                                                         threshold=ica_z_thresh)
             print(f'Automatically found eye artifact ICA components: {eog_indices}')
@@ -218,7 +209,7 @@ for pid in tqdm.tqdm(lstPIds):
             
             #TODO make true again, just not with  this data...
             if(True):
-                muscle_idx_auto, scores = ica.find_bads_muscle(epochs_ica)
+                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
                 #ica.plot_scores(scores, exclude=muscle_idx_auto)
                 
                 print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
@@ -238,7 +229,7 @@ for pid in tqdm.tqdm(lstPIds):
                 
                 ics_old = ica.exclude
                 #ica.plot_properties(epochs_ica, dB= True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
+                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 360. )
                 #ica.plot_overlay(epochs_ica.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
                 ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
 
@@ -286,7 +277,6 @@ for pid in tqdm.tqdm(lstPIds):
         #TODO maybe do a size check before appending                                  
         # save the ICAs for the corrmap 
         icas.append(ica)
-        arr_ica_epochs.append(epochs_ica)
         arr_epochs.append(epochs)    
  
  # %%
@@ -338,7 +328,8 @@ if preprocess or len(os.listdir('./fifs/clean/')) != NUM_BLOCKS * len(lstPIds):
         #print(p, " ", b, ": Final ICAs to exclude are" ,n.exclude)
         #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
         
-        arr_epochs[i] = ica.apply(arr_ica_epochs[i]) # TODO at least i hope so, double check indices. 
+        ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+        arr_epochs[i].apply_baseline(baseline=(None,0))
         arr_epochs[i].save('./fifs/clean/' + str(p) + '-' + str(b) + '-epo.fif', overwrite = True)
 
     clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
