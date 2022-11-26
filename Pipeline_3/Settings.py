@@ -6,6 +6,9 @@ save_plots = False
 draw_plots = False
 pick_ic_auto = False
 pick_ic_as_template = False
+
+preprocess = True
+
 threshold_multiplier = .000001
 
 epochs_tmin = -0.2
