@@ -201,11 +201,12 @@ for pid in tqdm.tqdm(lstPIds):
             
             while not done: 
                 
+                ics_old = ica.exclude
                 #ica.plot_properties(epochs, dB=True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_properties(epochs, dB=True, log_scale= True)
+                #ica.plot_properties(epochs, dB=True, log_scale= True)
                 ica.plot_sources(raw, block = True, title = str(pid) + '-' + str(x) )
-                ica.plot_overlay(raw, exclude=exclude_ic, picks='eeg', title = str(pid) + '-' + str(x), start = 20., stop=360. )
-        
+                ica.plot_overlay(raw, exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x), start = 20., stop=360. )
+
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
                                             prompt="Accept? - yes | no",
@@ -213,7 +214,6 @@ for pid in tqdm.tqdm(lstPIds):
                     try:
                         if accept == 'yes':
                             exclude_ic = ica.exclude
-                            #ica.exclude = [] # avoid excluding it twice
                             ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
                             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
                             done = True
@@ -222,10 +222,10 @@ for pid in tqdm.tqdm(lstPIds):
                                             err_prompt = "yes | no")
                             if quit == 'yes':
                                 pick_ic_as_template = False
-                                done = True
                                 break
                             break
                         else:
+                            ica.exclude = ics_old # doesn't to anything
                             quit = get_user_input(valid_response={'no', 'yes'},
                                             prompt="Quit? - yes | no",
                                             err_prompt = "yes | no")

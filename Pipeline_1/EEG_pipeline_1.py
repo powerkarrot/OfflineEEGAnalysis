@@ -61,6 +61,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
             dfEEG = dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"})
             dfEEG.drop("TimeLsl", axis =1, inplace=True)
+            dfEEG = dfEEG.rename(columns={"TimeLsl": "Time"})
 
             dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
             
@@ -200,11 +201,10 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
+                ics_old = ica.exclude
                 ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
                 ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 360. )
-                ics_old = ica.exclude
-
-                ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+                ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
 
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
@@ -212,20 +212,15 @@ for pid in tqdm.tqdm(lstPIds):
                                             err_prompt = "yes | no")
                     try:
                         if accept == 'yes':
-                            exclude_ic = ica.exclude
-                            #ica.exclude = [] # avoid excluding it twice
-                            ready_to_write = True                            
-                            if(ready_to_write):
-                                ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
-                                ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-                                done = True
-                                quit = get_user_input(valid_response={'no', 'yes'},
-                                            prompt="Quit? - yes | no",
-                                            err_prompt = "yes | no")                   
-                                if quit == 'yes':
-                                    pick_ic_as_template = False
-                                    done = True
-                                    break
+                            ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
+                            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+                            done = True
+                            quit = get_user_input(valid_response={'no', 'yes'},
+                                        prompt="Quit? - yes | no",
+                                        err_prompt = "yes | no")                   
+                            if quit == 'yes':
+                                pick_ic_as_template = False
+                                break
                             break
                         else:
                             ica.exclude = ics_old # doesn't to anything

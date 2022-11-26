@@ -238,11 +238,11 @@ for pid in tqdm.tqdm(lstPIds):
             done = False
             while not done:
                 
-                ica.plot_properties(epochs_ica, dB= True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
                 ics_old = ica.exclude
-
-                ica.plot_overlay(epochs_ica.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
+                #ica.plot_properties(epochs_ica, dB= True, log_scale= True, psd_args={'fmax':70})
+                ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
+                #ica.plot_overlay(epochs_ica.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
+                ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
 
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
@@ -250,9 +250,6 @@ for pid in tqdm.tqdm(lstPIds):
                                             err_prompt = "yes | no")
                     try:
                         if accept == 'yes':
-                            #exclude_ic = ica.exclude
-                            #ready_to_write = True                            
-                            #if(ready_to_write):
                             ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
                             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
                             done = True
@@ -261,7 +258,6 @@ for pid in tqdm.tqdm(lstPIds):
                                         err_prompt = "yes | no")                   
                             if quit == 'yes':
                                 pick_ic_as_template = False
-                                done = True
                                 break
                             break
                         else:
