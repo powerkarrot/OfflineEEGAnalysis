@@ -74,9 +74,6 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
 
             for x in range(1, NUM_BLOCKS+1):  
                 
-                # if(x > 1):
-                #     break
-                
                 # Prepare data 
                 # see if fif already present, else filter / clean data and save it
                         
@@ -170,9 +167,7 @@ for pid in tqdm.tqdm(lstPIds):
         if (pick_ic_auto):
             #start fresh, else find_bads_muscle fails
             ica.exclude = []
-            #print(str(pid) + ' block ' + str(x))
             
-            #TODO check if actually EEG
             ica_z_thresh = 1.96
             eog_indices, eog_scores = ica.find_bads_eog(epochs, 
                                                         ch_name=['F3', 'F4'], 
@@ -280,7 +275,7 @@ for n, ic_templ in enumerate(ica_templates):
     
 p = 0
 b = 0
-for i, n in enumerate(icas):
+for i, ica in enumerate(icas):
     b += 1
     p = p + 1 if i % 7 == 0 else p
     if p == 4: p = 5
@@ -290,22 +285,22 @@ for i, n in enumerate(icas):
     
     #print(p , " block ", b)
 
-    if 'exclude' in n.labels_:
+    if 'exclude' in ica.labels_:
         #n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("p "+ str(p) +" block " +str(b)) )
         
         #add autodetected artifacts to exclude
         if(pick_ic_auto):
-            for item in  n.labels_['exclude'] :
-                if item not in n.exclude:
-                    n.exclude.append(item)
+            for item in  ica.labels_['exclude'] :
+                if item not in ica.exclude:
+                    ica.exclude.append(item)
         else:
-            n.exclude = n.labels_['exclude']
+            ica.exclude = ica.labels_['exclude']
     # else:
     #     print("No templates selected \n")
     
     #print("Final ICAs to exclude are" ,n.exclude)
     #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
-    n.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+    ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 

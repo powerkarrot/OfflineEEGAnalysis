@@ -274,7 +274,7 @@ for n, ic_templ in enumerate(ica_templates):
 
 p = 0
 b = 0
-for i, n in enumerate(icas):
+for i, ica in enumerate(icas):
     b += 1
     p = p + 1 if i % 7 == 0 else p
     if p == 4: p = 5 
@@ -283,20 +283,20 @@ for i, n in enumerate(icas):
     b = 1 if  b == 8 else b
 
     # add excluded ICs from corrmap to ica.exclude
-    if 'exclude' in n.labels_:        
+    if 'exclude' in ica.labels_:        
         
         #add autodetected artifacts to exclude  
         if(pick_ic_auto):
-            for item in  n.labels_['exclude'] :
+            for item in  ica.labels_['exclude'] :
                 if item not in ica.exclude:
                     ica.exclude.append(item)
         else:
-            n.exclude = n.labels_['exclude']
+            ica.exclude = ica.labels_['exclude']
     # else:
     #     print("No templates selected \n")
             
     #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
-    n.apply(arr_raws[i]) # TODO at least i hope so, double check indices
+    ica.apply(arr_raws[i]) # TODO at least i hope so, double check indices
 
 # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
 # i could look into it. later.
