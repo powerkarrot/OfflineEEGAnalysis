@@ -58,9 +58,8 @@ if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
 
         if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
         
-            dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
-            dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
-                
+            dfState = pd.read_csv(f"{path}ID{pid}-state.csv")    
+                        
             dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
             dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"}, inplace=True) # actually dont think this is necessary
             dfEEG.drop("TimeLsl", axis = 1, inplace=True)
@@ -339,7 +338,7 @@ if preprocess or len(os.listdir('./fifs/clean/')) != NUM_BLOCKS * len(lstPIds):
         #print(p, " ", b, ": Final ICAs to exclude are" ,n.exclude)
         #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
         
-        ica.apply(arr_ica_epochs[i]) # TODO at least i hope so, double check indices. 
+        arr_epochs[i] = ica.apply(arr_ica_epochs[i]) # TODO at least i hope so, double check indices. 
         arr_epochs[i].save('./fifs/clean/' + str(p) + '-' + str(b) + '-epo.fif', overwrite = True)
 
     clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
