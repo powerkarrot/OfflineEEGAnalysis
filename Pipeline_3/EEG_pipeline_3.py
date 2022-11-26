@@ -62,20 +62,19 @@ if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
             dfState = pd.read_csv(f"{path}ID{pid}-state.csv")
                 
             dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
-            dfEEG = dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"})
-            dfEEG.drop("TimeLsl", axis =1, inplace=True)
+            dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"}, inplace=True) # actually dont think this is necessary
+            dfEEG.drop("TimeLsl", axis = 1, inplace=True)
 
             dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
             
             dffeedback = pd.read_csv(f"{path}ID{pid}-feedback.csv")
             
             dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
-            dfAll = dfAll.sort_values(by="Time") # inplace?
-            
-            dfAll = dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"] )
+            dfAll.sort_values(by="Time", inplace=True) # inplace?
+            dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"], inplace=True )
             dfAll.fillna(method='ffill', inplace=True)
-            dfAll = dfAll.drop(dfAll[dfAll.BlockNumber < 0].index)
-            dfAll = dfAll.dropna()
+            dfAll.drop(dfAll[dfAll.BlockNumber < 0].index, inplace=True)
+            dfAll.dropna(inplace=True)
 
             for x in range(1, NUM_BLOCKS+1):  
                 print("pid "  , pid, "block", x)
@@ -114,15 +113,15 @@ if len(os.listdir('./fifs/ica/')) != NUM_BLOCKS * len(lstPIds):
                 dffeedbackBlock = dffeedback.loc[(dffeedback['CurrentBlock'] == x)]
                 new_row = pd.DataFrame({'Time':float(dfAll['Time'].loc[(dfAll['BlockNumber']==x)].iloc[0])}, index =[0]) # first ball. kill me. my soul is dead.
                 dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
-                spawn_diff1 = dffeedbackBlock['Time'].diff(periods=1)
-                spawn_diff1.dropna(inplace=True)
-                #spawn_diff1[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
-                spawn_diff = np.cumsum(spawn_diff1)
-                times = np.full_like(spawn_diff, .1)       
+                spawn_diff = dffeedbackBlock['Time'].diff(periods=1)
+                spawn_diff.dropna(inplace=True)
+                #spawn_diff[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
+                spawn_onset = np.cumsum(spawn_diff)
+                times = np.full_like(spawn_onset, .1)       
                 
-                spawn_annot = mne.Annotations(onset=spawn_diff,
+                spawn_annot = mne.Annotations(onset=spawn_onset,
                             duration=times,
-                            description=['spawn'] * len(spawn_diff))
+                            description=['spawn'] * len(spawn_onset))
                 raw.set_annotations(spawn_annot)
                 
                 # Create events
