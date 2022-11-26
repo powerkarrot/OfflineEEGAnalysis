@@ -5,7 +5,7 @@ plot_plots = False
 save_plots = False
 draw_plots = False
 pick_ic_auto = False
-pick_ic_as_template = False
+pick_ic_as_template = True
 
 TEST = False
 
@@ -32,7 +32,7 @@ channel_groups = [[alpha_ch_groups[0], theta_ch_groups[0], [[alpha_ch_groups[0],
                  ]  
 
 # bad channels
-# TODO fill for all participants :')
+# TODO fill for all participants :') oh and expand to 32 channels later :DDDDDDDDDDDDDDDDD
 # Format: bads[pid][block]
 # example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
 bads = [[[], [], [], [], [], [], []],

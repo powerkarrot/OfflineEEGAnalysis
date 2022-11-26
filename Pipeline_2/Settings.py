@@ -35,7 +35,7 @@ channel_groups = [[alpha_ch_groups[0], theta_ch_groups[0], [[alpha_ch_groups[0],
 
 
 # bad channels
-# TODO fill for all participants and blocks :')
+# TODO fill for all participants :') oh and expand to 32 channels later :DDDDDDDDDDDDDDDDD
 # Format: bads[pid][block]
 # example : bads[pid=1] = [['F2', 'F3'], [], ['C4'], [], [], [],  []]
 bads = [[[], [], [], [], [], [],  []],

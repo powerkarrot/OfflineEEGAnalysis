@@ -14,7 +14,7 @@ while not done:
         pid = action.split()[0]
         block = action.split()[1]
         try:
-            epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(block) + '-epo.fif')
+            epochs = mne.read_epochs('./fifs/ica/' + str(pid) + '-' + str(block) + '_ica-epo.fif')
             epochs.load_data()
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(block) + '-ica.fif') 
             ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
@@ -24,8 +24,6 @@ while not done:
             ica.plot_overlay(epochs.average(), exclude=exclude_ic, picks='eeg', stop = 119., title = str(pid) + '-' + str(block))
             
             while True:
-                #TODO User input validation? Who cares!
-                #accept = input("Accept? - yes | esc")
                 accept = utils.get_user_input('yes | esc', 'Accept', "LEARN HOW TO READ AND TYPE")
                 try:
                     if accept == 'yes':

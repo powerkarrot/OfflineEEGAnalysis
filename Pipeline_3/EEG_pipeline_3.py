@@ -205,6 +205,7 @@ for pid in tqdm.tqdm(lstPIds):
         # Optionally autoreject muscle and eog artifacts
         if (pick_ic_auto):
             #start fresh, else find_bads_muscle fails
+            #cur_icas = ica.exclude 
             ica.exclude = []
             
             #TODO check if actually EEG
@@ -241,7 +242,7 @@ for pid in tqdm.tqdm(lstPIds):
                 ica.plot_sources(epochs_ica, block = True, title = str(pid) + '-' + str(x), stop = 360. )
                 ics_old = ica.exclude
 
-                ica.plot_overlay(epochs_ica.average(), exclude=exclude_ic, picks='eeg', stop = 360.)
+                ica.plot_overlay(epochs_ica.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
 
                 while True:
                     accept = get_user_input(valid_response={'no', 'yes'},
@@ -249,20 +250,19 @@ for pid in tqdm.tqdm(lstPIds):
                                             err_prompt = "yes | no")
                     try:
                         if accept == 'yes':
-                            exclude_ic = ica.exclude
-                            #ica.exclude = [] # avoid excluding it twice
-                            ready_to_write = True                            
-                            if(ready_to_write):
-                                ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
-                                ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+                            #exclude_ic = ica.exclude
+                            #ready_to_write = True                            
+                            #if(ready_to_write):
+                            ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
+                            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
+                            done = True
+                            quit = get_user_input(valid_response={'no', 'yes'},
+                                        prompt="Quit? - yes | no",
+                                        err_prompt = "yes | no")                   
+                            if quit == 'yes':
+                                pick_ic_as_template = False
                                 done = True
-                                quit = get_user_input(valid_response={'no', 'yes'},
-                                            prompt="Quit? - yes | no",
-                                            err_prompt = "yes | no")                   
-                                if quit == 'yes':
-                                    pick_ic_as_template = False
-                                    done = True
-                                    break
+                                break
                             break
                         else:
                             ica.exclude = ics_old # doesn't to anything
