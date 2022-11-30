@@ -28,13 +28,17 @@ id1_novr_alpha = philistine.mne.attenuation_iaf([raw_id1_eyesopen_novr,raw_id1_e
 id1_vr_alpha = philistine.mne.attenuation_iaf([raw_id1_eyesopen_vr,raw_id1_eyesclosed_vr], picks='eeg')
 id2_no_vr_alpha = philistine.mne.attenuation_iaf([raw_id2_eyesopen_novr,raw_id2_eyesclosed_novr], picks='eeg')
 id2_vr_alpha = philistine.mne.attenuation_iaf([raw_id2_eyesopen_vr,raw_id2_eyesclosed_vr], picks='eeg')
-id2_vr_alpha_bothclosed = philistine.mne.attenuation_iaf([raw_id2_eyesclosed_vr,raw_id1_eyesclosed2_vr], picks='eeg')
 
 print("ID1 no VR: ", id1_novr_alpha)
 print("ID1 VR: ", id1_vr_alpha)
 print("ID2 no VR: ", id2_no_vr_alpha)
 print("ID2 VR: ", id2_vr_alpha)
-print("ID2 VR both closed: ", id2_vr_alpha)
+
+
+
+id1_vr_alpha_bothclosed = philistine.mne.attenuation_iaf([raw_id1_eyesclosed_vr,raw_id1_eyesclosed2_vr], picks='eeg')
+print("ID1 VR both closed: ", id1_vr_alpha_bothclosed)
+
 
 # v2_id2_vr_alpha = philistine.mne.savgol_iaf(raw_id2_eyesopen_novr, picks='eeg')
 # print("V2 ID2 no VR eyes open: ", v2_id2_vr_alpha)
