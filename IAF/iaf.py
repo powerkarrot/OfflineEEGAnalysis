@@ -27,7 +27,7 @@ raws = [[[raw_id1_eyesopen_novr,raw_id1_eyesclosed_novr],[raw_id1_eyesopen_vr,ra
 
 for grp in alpha_ch_groups:    
     for i, subject in enumerate(raws):
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 3))        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))        
         ax1.set_title("ID " + str(i+1) + " no VR")
         ax2.set_title("ID " + str(i+1) + " VR")
         picks =  select_channels_picks(subject[0][0], grp)                                                 
@@ -35,8 +35,9 @@ for grp in alpha_ch_groups:
         vr_alpha = philistine.mne.attenuation_iaf([subject[1][0],subject[1][1]], picks=picks, savgol=True,ax=ax2)
         print("ID", i+1 , " no VR: ", novr_alpha)
         print("ID", i+1 , " VR: ", vr_alpha)
-
-
+        fig.set_constrained_layout(True)
+        
+        
 # id1_vr_alpha_bothclosed = philistine.mne.attenuation_iaf([raw_id1_eyesclosed_vr,raw_id1_eyesclosed2_vr], picks='eeg', savgol=True)
 # print("ID1 VR both closed: ", id1_vr_alpha_bothclosed)
 
