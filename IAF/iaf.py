@@ -5,9 +5,17 @@ import mne
 import philistine
 from  Settings import *
 from utils import *
+import cupy as cp
+import os
 
 mne.set_log_level(False)
+mne.cuda.init_cuda(verbose=True)
+
 mne.utils.set_config('MNE_USE_CUDA', 'true')  
+
+
+print(mne.cuda.get_cuda_memory(kind='total'))
+
 plt.rcParams.update({'figure.max_open_warning': 0})
 
 raw_id1_eyesopen_novr = make_raw("ID101-EEG")
