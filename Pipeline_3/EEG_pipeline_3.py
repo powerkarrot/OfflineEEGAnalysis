@@ -46,108 +46,106 @@ if TEST:
 
 # %%
 
-dir_path = r'./fifs'
-Path('./fifs/ica').mkdir(parents=True, exist_ok=True)
+dir_path = r'./fifs/'
+#Path('./fifs/ica').mkdir(parents=True, exist_ok=True)
+Path('./fifs/clean').mkdir(parents=True, exist_ok=True)
 Path('./pickles').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./ica/fifs').mkdir(parents=True, exist_ok=True)
 
 arr_epochs = []
 arr_ica_epochs = []
+
 if get_num_files(dir_path) != NUM_BLOCKS * len(lstPIds):
-                           
     for pid in tqdm.tqdm(lstPIds):
+    
+        dfState = pd.read_csv(f"{path}ID{pid}-state.csv")    
+                    
+        dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
+        dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"}, inplace=True) # actually dont think this is necessary
+        dfEEG.drop("TimeLsl", axis = 1, inplace=True)
 
-        if len(os.listdir('./fifs/')) != NUM_BLOCKS * len(lstPIds):
+        dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
         
-            dfState = pd.read_csv(f"{path}ID{pid}-state.csv")    
-                        
-            dfEEG = pd.read_csv(f"{path}ID{pid}-EEG.csv")
-            dfEEG.rename(columns={"Value0": "F3", "Value1": "C3", "Value2": "P3", "Value3": "P4", "Value4": "C4", "Value5": "F4", "Value6": "Pz"}, inplace=True) # actually dont think this is necessary
-            dfEEG.drop("TimeLsl", axis = 1, inplace=True)
+        dffeedback = pd.read_csv(f"{path}ID{pid}-feedback.csv")
+        
+        dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
+        dfAll.sort_values(by="Time", inplace=True) # inplace?
+        dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"], inplace=True )
+        dfAll.fillna(method='ffill', inplace=True)
+        dfAll.drop(dfAll[dfAll.BlockNumber < 0].index, inplace=True)
+        dfAll.dropna(inplace=True)
 
-            dstate = pd.read_csv(f"{path}ID{pid}-state.csv")
+        for x in range(1, NUM_BLOCKS+1):  
+            print("pid "  , pid, "block", x)
+    
+            # Prepare data 
+            # see if fif already present, else filter / clean data and save it
+                    
+            data = dfAll.loc[dfAll['BlockNumber'] == x]
+            df = pd.DataFrame(data)
+
+            info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
+            info.set_montage('standard_1020',  match_case=False)
+
+            samples = df.T
             
-            dffeedback = pd.read_csv(f"{path}ID{pid}-feedback.csv")
+            raw = mne.io.RawArray(samples, info)
+            raw.drop_channels(['Time', 'BlockNumber'])
             
-            dfAll = pd.merge(dfEEG, dstate, on =["Time"], how="outer")
-            dfAll.sort_values(by="Time", inplace=True) # inplace?
-            dfAll.drop(columns=["Value7","AdaptationStatus", "NBackN", "State"], inplace=True )
-            dfAll.fillna(method='ffill', inplace=True)
-            dfAll.drop(dfAll[dfAll.BlockNumber < 0].index, inplace=True)
-            dfAll.dropna(inplace=True)
-
-            for x in range(1, NUM_BLOCKS+1):  
-                print("pid "  , pid, "block", x)
-      
-                # Prepare data 
-                # see if fif already present, else filter / clean data and save it
-                        
-                data = dfAll.loc[dfAll['BlockNumber'] == x]
-                df = pd.DataFrame(data)
-
-                info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
-                info.set_montage('standard_1020',  match_case=False)
-
-                samples = df.T
-                
-                raw = mne.io.RawArray(samples, info)
-                raw.drop_channels(['Time', 'BlockNumber'])
-                
-                # remove power line interferance
-                raw.notch_filter(50., n_jobs=-1)
-                
-                # high pass filter to remove slow drifts, 70 Hz low pass
-                raw.filter(1., 70, None, fir_design='firwin')
-                
-                # set EEG reference
-                raw.set_eeg_reference('average', projection=True)
-                #raw.set_eeg_reference(ref_channels=['Pz'])
-
-                # Visual inspection of bad channels
-                # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
-                raw.info['bads'] =  bads[pid-1][x-1]
-                if raw.info['bads']:
-                    raw.interpolate_bads()
+            # remove power line interferance
+            raw.notch_filter(50., n_jobs=-1)
             
-                # Create Annotations:
-                dffeedbackBlock = dffeedback.loc[(dffeedback['CurrentBlock'] == x)]
-                new_row = pd.DataFrame({'Time':float(dfAll['Time'].loc[(dfAll['BlockNumber']==x)].iloc[0])}, index =[0]) # first ball. kill me. my soul is dead.
-                dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
-                spawn_diff = dffeedbackBlock['Time'].diff(periods=1)
-                spawn_diff.dropna(inplace=True)
-                #spawn_diff[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
-                spawn_onset = np.cumsum(spawn_diff)
-                times = np.full_like(spawn_onset, .1)       
-                
-                spawn_annot = mne.Annotations(onset=spawn_onset,
-                            duration=times,
-                            description=['spawn'] * len(spawn_onset))
-                raw.set_annotations(spawn_annot)
-                
-                # Create events
-                (events, event_dict) = mne.events_from_annotations(raw)
-                
-                # Create epochs                
-                picks = mne.pick_types(raw.info, eeg=True)
-                epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
-                    baseline=None, preload=True)
-                
-                del(raw)
-                                
-                # Global autoreject based on rejection threshold
-                reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
-                #print("The rejection dictionary is %s " %reject)
+            # high pass filter to remove slow drifts, 70 Hz low pass
+            raw.filter(1., 70, None, fir_design='firwin')
+            
+            # set EEG reference
+            raw.set_eeg_reference('average', projection=True)
+            #raw.set_eeg_reference(ref_channels=['Pz'])
 
-                #reject['eeg'] *= threshold_multiplier
-                epochs.drop_bad(reject=reject)
+            # Visual inspection of bad channels
+            # TODO, empty for now. With new setup, check for bad channels only once for all blocks.
+            raw.info['bads'] =  bads[pid-1][x-1]
+            if raw.info['bads']:
+                raw.interpolate_bads()
+        
+            # Create Annotations:
+            dffeedbackBlock = dffeedback.loc[(dffeedback['CurrentBlock'] == x)]
+            new_row = pd.DataFrame({'Time':float(dfAll['Time'].loc[(dfAll['BlockNumber']==x)].iloc[0])}, index =[0]) # first ball. kill me. my soul is dead.
+            dffeedbackBlock = pd.concat([new_row, dffeedbackBlock]).reset_index(drop = True)            
+            spawn_diff = dffeedbackBlock['Time'].diff(periods=1)
+            spawn_diff.dropna(inplace=True)
+            #spawn_diff[0] = 0  # NOTE: first ball. add later, for now dont add as it's guesswork                               
+            spawn_onset = np.cumsum(spawn_diff)
+            times = np.full_like(spawn_onset, .1)       
+            
+            spawn_annot = mne.Annotations(onset=spawn_onset,
+                        duration=times,
+                        description=['spawn'] * len(spawn_onset))
+            raw.set_annotations(spawn_annot)
+            
+            # Create events
+            (events, event_dict) = mne.events_from_annotations(raw)
+            
+            # Create epochs                
+            picks = mne.pick_types(raw.info, eeg=True)
+            epochs = mne.Epochs(raw, events, event_id=event_dict, tmin = epochs_tmin, tmax=epochs_tmax, event_repeated='merge',
+                baseline=None, preload=True)
+            
+            del(raw)
+                            
+            # Global autoreject based on rejection threshold
+            reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
+            #print("The rejection dictionary is %s " %reject)
 
-                #epochs.plot_drop_log()
+            #reject['eeg'] *= threshold_multiplier
+            epochs.drop_bad(reject=reject)
+            #epochs.plot_drop_log()
 
-                #arr_epochs.append(epochs)
-                epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
+            #arr_epochs.append(epochs)
+            epochs.save('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
 
-            del(dfState, dffeedback, dffeedbackBlock, dfEEG, dfAll)
+        del(dfState, dffeedback, dffeedbackBlock, dfEEG, dfAll)
 
 
 # %%
@@ -347,15 +345,13 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         
         if preprocess: epochs = clean_epochs[n][x-1] 
         else: epochs = mne.read_epochs('./fifs/clean/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
-        
         #epochs = clean_epochs[n][x-1]
-     
         evoked = epochs.average()
 
         #Test plot
         ball_drop = epochs['spawn'].average()
         ts_args = dict(gfp=True, time_unit='s', spatial_colors=True)
-        #ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
+        ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
         # noise_cov = mne.compute_covariance(epochs, tmax=0., method='shrunk', rank=None,
         #                     verbose='error')
         #evoked.plot_white(noise_cov=noise_cov, time_unit='s') 
