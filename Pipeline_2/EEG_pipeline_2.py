@@ -13,7 +13,7 @@ import tqdm
 from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
 from Settings import *
-from utils import get_user_input
+from utils import *
 # %%
 mne.set_log_level(False)
 try:
@@ -347,34 +347,27 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
         for grp_nr in range(len(channel_groups)):
             
-            # Channel groups to exclude
-            mask = np.array(np.isin(channels,alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
-            excl = list(compress(channels, mask))
-            picks_alpha = mne.pick_types(epochs.info,eeg=True, exclude=excl)
-            
-            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
-            excl1 = list(compress(channels, mask1))
-            picks_theta = mne.pick_types(epochs.info,eeg=True, exclude=excl1)
-                
+            #pick channels for different frequencies
+            picks = mne.pick_types(raw.info, eeg=True)
+            picks_alpha = mne.pick_types(raw.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][0]))
+            picks_theta = mne.pick_types(raw.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][1]))
+
             for m, method in enumerate(methods):
                 njob = "cuda" if cuda else -1
                 n_jobs = njob if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus
-
-                spectrum = raw.copy().compute_psd(method= method, n_jobs=n_jobs)
-                psds, freqs = spectrum.get_data(return_freqs=True)
+                
+                psds, freqs = get_psd(raw, method, picks, n_jobs) 
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
                 psds_mean = psds.mean(0)
                 freq_res = freqs[1] - freqs[0]
                 
-                spectrum_alpha = raw.copy().compute_psd(method= method, n_jobs=n_jobs, picks=picks_alpha)
-                psds_alpha, freqs_alpha = spectrum_alpha.get_data(return_freqs=True)
+                psds_alpha, freqs_alpha = get_psd(raw, method, picks_alpha, n_jobs)  
                 psds_mean_alpha = psds_alpha.mean(0)
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
-                spectrum_theta = raw.copy().compute_psd(method= method, n_jobs=n_jobs, picks=picks_theta)
-                psds_theta, freqs_theta = spectrum_theta.get_data(return_freqs=True)
+                psds_theta, freqs_theta = get_psd(raw, method, picks_theta, n_jobs)            
                 psds_mean_theta = psds_theta.mean(0)
                 freq_res_theta = freqs_theta[1] - freqs_theta[0]
-                
                 
                 # Find intersecting values in frequency vector
                 idx_alpha = np.logical_and(freqs_alpha >= bands.alpha[0], freqs_alpha <= bands.alpha[1])
