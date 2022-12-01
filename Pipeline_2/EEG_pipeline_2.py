@@ -16,7 +16,13 @@ from Settings import *
 from utils import get_user_input
 # %%
 mne.set_log_level(False)
-mne.utils.set_config('MNE_USE_CUDA', 'true')  
+try:
+    mne.cuda.init_cuda(verbose=True)
+    mne.utils.set_config('MNE_USE_CUDA', 'true') 
+finally:
+    cuda=True
+
+
 plt.rcParams.update({'figure.max_open_warning': 0})
 
 #all ICAs to compute
@@ -351,8 +357,8 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
             picks_theta = mne.pick_types(epochs.info,eeg=True, exclude=excl1)
                 
             for m, method in enumerate(methods):
-                
-                n_jobs = -1 if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus
+                njob = "cuda" if cuda else -1
+                n_jobs = njob if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus
 
                 spectrum = raw.copy().compute_psd(method= method, n_jobs=n_jobs)
                 psds, freqs = spectrum.get_data(return_freqs=True)

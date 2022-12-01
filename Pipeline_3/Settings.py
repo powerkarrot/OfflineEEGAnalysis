@@ -19,6 +19,7 @@ TEST = False
 #eeg stuff config
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
 methods = ['multitaper', 'welch']
+
 sfreq = 300
 epochs_tstep = 4.
 NUM_BLOCKS = 7

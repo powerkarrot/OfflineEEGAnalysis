@@ -17,8 +17,12 @@ from utils import *
 
 # %%
 mne.set_log_level(False)
-mne.utils.set_config('MNE_USE_CUDA', 'true')  
 plt.rcParams.update({'figure.max_open_warning': 0})
+try:
+    mne.cuda.init_cuda(verbose=True)
+    mne.utils.set_config('MNE_USE_CUDA', 'true') 
+finally:
+    cuda=True
 
 # %%
 icas = []
@@ -351,7 +355,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
         #Test plot
         ball_drop = epochs['spawn'].average()
         ts_args = dict(gfp=True, time_unit='s', spatial_colors=True)
-        ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
+        #ball_drop.plot_joint(ts_args=ts_args, title="PID " + str(pid) + " block " + str(x))
         # noise_cov = mne.compute_covariance(epochs, tmax=0., method='shrunk', rank=None,
         #                     verbose='error')
         #evoked.plot_white(noise_cov=noise_cov, time_unit='s') 
@@ -406,7 +410,9 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                                     
             for m, method in enumerate(methods):
                 
+                #njob = "cuda" if cuda else -1
                 njobs = 2 if method == 'welch' else -1
+                
 
                 spectrum = epochs.compute_psd(method = method,n_jobs = njobs, picks=picks)
                 # average across epochs first
