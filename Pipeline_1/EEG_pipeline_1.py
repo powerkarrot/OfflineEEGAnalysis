@@ -343,7 +343,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
       
         ### Compute the power spectral density (PSD)
         
-        for grp_nr in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
+        for grp_nr in range(len(channel_groups)): 
             #pick channels for different frequencies
             picks = mne.pick_types(epochs.info, eeg=True)
             picks_alpha = mne.pick_types(epochs.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][0]))

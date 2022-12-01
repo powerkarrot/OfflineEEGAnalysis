@@ -395,48 +395,30 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
 
       
         ### Compute the power spectral density (PSD)
-        
-        for grp_nr in range(len(channel_groups)): # TODO change this lul query first indice of ch_grps
+        for grp_nr in range(len(channel_groups)):
             
+            #pick channels for different frequencies
             picks = mne.pick_types(epochs.info, eeg=True)
-            
-            mask = np.array(np.isin(channels, alpha_ch_groups[grp_nr][0], invert=True), dtype = bool)
-            excl = list(compress(channels, mask))
-            picks_alpha = mne.pick_types(epochs.info, eeg=True,  exclude=excl)
-            
-            mask1 = np.array(np.isin(channels,theta_ch_groups[grp_nr][1], invert=True), dtype = bool)
-            excl1 = list(compress(channels, mask1))
-            picks_theta = mne.pick_types(epochs.info, eeg=True, exclude=excl1)
+            picks_alpha = mne.pick_types(epochs.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][0]))
+            picks_theta = mne.pick_types(epochs.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][1]))
                                     
             for m, method in enumerate(methods):
                 
                 #njob = "cuda" if cuda else -1
                 njobs = 2 if method == 'welch' else -1
                 
-
-                spectrum = epochs.compute_psd(method = method,n_jobs = njobs, picks=picks)
-                # average across epochs first
-                mean_spectrum = spectrum.average() 
-                psds, freqs = mean_spectrum.get_data(return_freqs=True)
+                psds, freqs = get_psd(epochs, method, picks) 
+                # psds /= np.sum(psds, axis=-1, keepdims=True) 
                 psds_mean = psds.mean(0)
                 freq_res = freqs[1] - freqs[0]
-                
-                
+    
                 ## ALPHA
-                spectrum_alpha = epochs.compute_psd(method = method,  n_jobs = njobs, picks=picks_alpha)
-                mean_spectrum_alpha = spectrum_alpha.average() 
-                psds_alpha, freqs_alpha = mean_spectrum_alpha.get_data(return_freqs=True)
-                # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                psdsDB_alpha = 10 * np.log10(psds_alpha)
+                psds_alpha, freqs_alpha = get_psd(epochs, method, picks_alpha)  
                 psds_mean_alpha = psds_alpha.mean(0)
                 freq_res_alpha = freqs_alpha[1] - freqs_alpha[0]
                 
                 #THETA
-                spectrum_theta = epochs.compute_psd(method = method, n_jobs = njobs, picks=picks_theta)
-                mean_spectrum_theta = spectrum_theta.average()  
-                psds_theta, freqs_theta = mean_spectrum_theta.get_data(return_freqs=True)
-                # psds /= np.sum(psds, axis=-1, keepdims=True) 
-                psdsDB_theta = 10 * np.log10(psds_theta)
+                psds_theta, freqs_theta = get_psd(epochs, method, picks_theta)            
                 psds_mean_theta = psds_theta.mean(0)
                 freq_res_theta = freqs_theta[1] - freqs_theta[0]
                 
@@ -502,7 +484,6 @@ calc_powers = ['Alpha', 'Theta', 'Alpha/Theta']
 f, axes = plt.subplots(n_ch, len(calc_powers), figsize=(15,6), constrained_layout=True, squeeze=False)
 dfPowers  = pd.DataFrame(pws_lst, columns =['PID', 'BlockNumber', 'Alpha', 'Theta', 'Alpha/Theta', 'Group', 'Method'])
 
-#TODO channel_groups will be 2D array dont forget. check channel_groups[i][y] of smth link that
 ax_idx = 1 if len(axes) > 1 else 0
 for ch_grp in range(n_ch):
     for calc_power, ax1 in enumerate(axes[ax_idx]): # up to 3
