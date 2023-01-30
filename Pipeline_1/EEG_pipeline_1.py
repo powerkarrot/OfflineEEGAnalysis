@@ -97,7 +97,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 
                 # set EEG reference
                 raw.set_eeg_reference('average', projection=True)
-                #raw.set_eeg_reference(ref_channels=['Pz'])
+                #raw.set_eeg_reference(ref_channels=['Pz'])#
                 
                 # Visual inspection of bad channels
                 # TODO, empty for now. With new setup, check for bad channels only once for all blocks.

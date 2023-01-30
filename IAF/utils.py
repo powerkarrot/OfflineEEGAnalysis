@@ -5,19 +5,12 @@ from Settings import *
 import pandas as pd
 import mne
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 from itertools import compress
-    
-def get_user_input(valid_response, prompt, err_prompt):
-    prompts = chain([prompt], repeat(err_prompt))
-    replies = map(input, prompts)
-    lowercased_replies = map(str.lower, replies)
-    stripped_replies = map(str.strip, lowercased_replies)
-    return next(filter(valid_response.__contains__, stripped_replies))
-
-
-def get_num_files(dir_path):
-    return len([name for name in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, name))])
+import philistine
+import autoreject
+from autoreject import get_rejection_threshold
 
 def make_raw(dir, preprocess=True):
 
@@ -30,13 +23,21 @@ def make_raw(dir, preprocess=True):
     
     if preprocess:
         raw = preprocess_raw(raw)
-
     return raw
 
-def preprocess_raw(raw):
+def make_epoch(raw):
+    
+    epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = 1.)
+    
+    reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
+    print("The rejection dictionary is %s " %reject)
+    epochs.drop_bad(reject=reject)
+    
+    return  epochs
 
-    raw.notch_filter(50., n_jobs=-1)       
-    raw.filter(1., 70., None, fir_design='firwin')
+def preprocess_raw(raw):
+    raw.notch_filter(60., n_jobs='cuda')       
+    raw.filter(1., 70., None, fir_design='firwin', n_jobs='cuda')
     raw.set_eeg_reference('average', projection=True)
     return raw
 
@@ -44,3 +45,26 @@ def select_channels_picks(instance, picked_channels):
     mask = np.array(np.isin(channels, picked_channels, invert=True), dtype = bool)
     excl = list(compress(channels, mask))
     return mne.pick_types(instance.info, eeg=True,  exclude=excl)
+
+
+def test_channels(raw1, raw2, channel_list):
+    bad_chs = []
+    for ch in enumerate(channel_list):
+        p =  select_channels_picks(raw1, ch)
+        try:
+            philistine.mne.attenuation_iaf([raw1,raw2], picks=p, savgol='diff', resolution=.1)
+        except Exception as e:
+            print(e)
+            bad_chs.append(ch)
+    return(bad_chs)
+            
+def test_channels2(raw1,channel_list):
+    bad_chs = []
+    for ch in enumerate(channel_list):
+        p =  select_channels_picks(raw1, ch)
+        try:
+            philistine.mne.savgol_iaf(raw1, picks=p)
+        except:
+            bad_chs.append(ch)
+    
+    return(bad_chs)

@@ -109,7 +109,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
                 raw.interpolate_bads()   
             
             #arr_raws.append(raw)
-            raw.save('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', overwrite = False)
+            raw.save('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', overwrite = True)
                
 
 # %%
