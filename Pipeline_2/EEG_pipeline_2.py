@@ -83,6 +83,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
         for x in range(1, NUM_BLOCKS+1):  
             
             # Prepare data 
+            print(x)
             data = dfAll.loc[dfAll['BlockNumber'] == x]
             df = pd.DataFrame(data)
 
@@ -98,7 +99,7 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
             raw.notch_filter(50., n_jobs=-1)
             
             #high pass filter to remove slow drifts, 70 Hz low pass
-            raw.filter(1., 70.)
+            raw.filter(1., 100.)
             
             # set eeg reference
             raw.set_eeg_reference('average')
@@ -124,32 +125,11 @@ for pid in tqdm.tqdm(lstPIds):
     for x in range(1, NUM_BLOCKS+1):  
         
         raw = mne.io.read_raw_fif('./fifs/' + str(pid) + '-' + str(x) + '_eeg.fif', preload=True)
-        print(raw.info)
 
         # independent component analysis (ICA)                
         if len(os.listdir('./ica/fifs/')) != NUM_BLOCKS * len(lstPIds):
             ica = mne.preprocessing.ICA(method="infomax",random_state = 97, fit_params=dict(extended=True))
             
-            # make one second epochs for ICA fit
-            # later apply to raw data
-            # epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
-
-            # local_autoreject = False
-            # if local_autoreject:
-            #     ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-            #     epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
-            #     reject_log.plot('horizontal')
-            #     evoked_bad = epochs[reject_log.bad_epochs].average()
-            #     plt.figure()
-            #     plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
-            #     epochs_clean.average().plot(axes=plt.gca())
-            #     #epochs = epochs_clean
-            #     ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
-            # else : 
-            #     reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)
-            #     #print("The rejection dictionary is %s " %reject)
-            #     epochs.drop_bad(reject=reject)
-            #     ica.fit(epochs, tstep=epochs_tstep)
             ica.fit(raw)
                 
             labels = label_components(raw, ica, method='iclabel')
@@ -160,14 +140,13 @@ for pid in tqdm.tqdm(lstPIds):
             #ica.plot_components()
             
             ica.exclude = idx_exclude
-            print(ica.exclude)
             # ica.labels_['exclude'] = idx_exclude
-            #ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True) TODO: addagain
+            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True) 
             #epochs.save('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', overwrite = True)
           
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-            epochs = mne.read_epochs('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
+            #epochs = mne.read_epochs('./ica/epochs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
                      
         #TODO put this somewhere else
         clean_ica_excludes = False
@@ -200,7 +179,7 @@ for i, ica in enumerate(icas):
     #n.plot_overlay(arr_raws[i], n.exclude, picks='eeg',  title=("Pid "+ str(p) +" block " +str(b)), stop = 360.)
     ica.apply(arr_raws[i], exclude=ica.exclude) # TODO at least i hope so, double check indices
 
-# for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
+# # for whatever reason i cant convert the arr_raws array to numpy to do the reshape :D 
 # i could look into it. later.
 for i in range(len(lstPIds)):
     for j in range(NUM_BLOCKS):
@@ -214,7 +193,11 @@ for i in range(len(lstPIds)):
 pws_lst = list()
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
     
-    for x in range(1,NUM_BLOCKS+1):
+    if (pid > 1):
+        break
+    
+    for x in range(START_BLOCK,NUM_BLOCKS+1):
+                
         
         raw = clean_raws[n][x-1]
 
@@ -249,6 +232,8 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
             picks_theta = mne.pick_types(raw.info, eeg=True, exclude=mask_channels(channel_groups[grp_nr][1]))
 
             for m, method in enumerate(methods):
+                
+                print('PID' , pid, 'Blocknr' , x, 'method' , method, 'group' , grp_nr)
                 njob = "cuda" if cuda else -1
                 n_jobs = njob if method != 'welch' else 2 #NOTE: this is a bug in NME, welch with raw does not support using all cpus
                 
@@ -287,14 +272,14 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                 
                 if(plot_plots):
 
-                    fig, axes = plt.subplots(2, 2, figsize=(7, 3))
+                    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
                     for ind, (label, band_def) in enumerate(bands):
                         
                         # Create a topomap for the current oscillation bandca
                         raw.compute_psd(method=method).plot_topomap({label: band_def}, ch_type='eeg', cmap = 'viridis', show_names=True, normalize=True, axes=axes[0, ind], show=False)
 
                         idx = np.logical_and(freqs >= band_def[0], freqs <=  band_def[1])
-                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(channel_groups[grp_nr]), {'fontsize' : 7})
+                        axes[0,ind].set_title(method + " PSD topo " + label + ' power ' + str(grp_nr), {'fontsize' : 7})
 
                         psds_std = (psds_mean[idx]).std(0)
                         peak = freqs[np.argmax(psds_mean[idx])]
@@ -303,7 +288,7 @@ for n, pid in enumerate(tqdm.tqdm(lstPIds)):
                                         color='k', alpha=.5)
                         axes[1,ind].set_title(method + " PSD " + label + ' power', {'fontsize' : 7})
                     
-                    fig.suptitle("PID " + str(pid) + " block " + str(x) + " " + str(channel_groups[grp_nr]))
+                    fig.suptitle("PID " + str(pid) + " block " + str(x) + " " + str(grp_nr))
                     fig.set_constrained_layout(True)
                     
                     if(save_plots):
