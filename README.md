@@ -1,1 +1,1 @@
-# AdaptiveSystem
+# Offline EEG Analysis Pipelines
