@@ -18,6 +18,10 @@ START_BLOCK = 1
 
 TEST = False
 
+path = "../Data/"
+path = "../PilotData/15%/"
+path = "../PilotData/30%/"
+
 
 ch_names = ['Time', 'Fp1','Fz','F3','F7','F9','FC5','FC1','C3','T7','CP5','CP1',
             'Pz','P3','P7','P9','O1','Oz','O2','P10','P8','P4','CP2','CP6',

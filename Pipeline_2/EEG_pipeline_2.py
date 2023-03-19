@@ -32,7 +32,6 @@ clean_raws = {}
 
 # %%
 lstPIds = []
-path = "../Data/"
 for filename in os.listdir(path):
     if filename.endswith(".csv"): 
         lstPIds.append(int(filename.split("-")[0].replace("ID", "")))
@@ -59,7 +58,7 @@ Path('./ica/epochs').mkdir(parents=True, exist_ok=True)
 Path('./Plots/ICA').mkdir(parents=True, exist_ok=True)
 Path('./Plots/NoICA').mkdir(parents=True, exist_ok=True)
 
-
+#TODO: add option to recompute anyways
 if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
     for pid in tqdm.tqdm(lstPIds):
 
@@ -192,14 +191,13 @@ for i in range(len(lstPIds)):
 
 pws_lst = list()
 for n, pid in enumerate(tqdm.tqdm(lstPIds)):
-    
-    if (pid > 1):
-        break
-    
+ 
     for x in range(START_BLOCK,NUM_BLOCKS+1):
                 
         
         raw = clean_raws[n][x-1]
+        if (x == 3):
+            raw.plot(block=True)
 
         #plot alpha and theta 
         if(plot_plots):

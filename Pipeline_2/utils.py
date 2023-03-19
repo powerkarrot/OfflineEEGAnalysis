@@ -22,7 +22,11 @@ def get_psd(instance, method, picks, n):
         spectrum = instance.compute_psd(method = method, n_jobs=n, picks=picks, **{'low_bias': False})
     else:
         kwargs = {'n_fft':1024}
-        spectrum = instance.compute_psd(method = method, n_jobs=n, picks=picks, **{'n_fft':1024})
+        try:
+            spectrum = instance.compute_psd(method = method, n_jobs=n, picks=picks, **{'n_fft':1024})
+        except:
+            spectrum = instance.compute_psd(method = method, n_jobs=n, picks=picks, **{'n_fft':128})
+
     return spectrum.get_data(return_freqs=True)
 
 def mask_channels(target_ch):
