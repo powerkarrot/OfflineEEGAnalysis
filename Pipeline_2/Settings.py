@@ -13,7 +13,7 @@ bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})
 epochs_tstep = 4.
 methods = ['multitaper', 'welch']
 sfreq = 500
-NUM_BLOCKS = 5
+NUM_BLOCKS = 5 #change to 9, then remove the resting blocks
 START_BLOCK = 1
 
 TEST = False
