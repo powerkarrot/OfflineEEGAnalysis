@@ -12,6 +12,7 @@ import seaborn as sns
 import tqdm
 from autoreject import get_rejection_threshold
 from scipy.integrate import simpson
+from mne_icalabel import label_components
 from Settings import *
 from utils import *
 
@@ -107,7 +108,8 @@ if len(os.listdir('./fifs')) != NUM_BLOCKS * len(lstPIds):
    
                 # Create equal length epochs of 4 seconds
                 epochs = mne.make_fixed_length_epochs(raw.copy(), preload=True, duration = epochs_tstep)
-                
+                epochs.set_eeg_reference('average', projection=True)
+
                 # Global autoreject based on rejection threshold
                 reject = get_rejection_threshold(epochs, ch_types = 'eeg', verbose=False)      
                 #print("The rejection dictionary is %s " %reject)
@@ -124,17 +126,7 @@ action = None
 
 for pid in tqdm.tqdm(lstPIds):
 
-    if action == 'no':
-        pick_ic_as_template = False
-    else:
-        if pick_ic_as_template:
-            action = get_user_input(valid_response={'no', 'yes'},
-                        prompt="Select ICs for ICE corrmap? - yes | no", 
-                        err_prompt="Type  \"yes\" or \"no\": \n")
-        
-        if action == 'no':
-            pick_ic_as_template = False
-                
+ 
     for x in range(1, NUM_BLOCKS+1):  
         
         epochs = mne.read_epochs('./fifs/' + str(pid) + '-' + str(x) + '-epo.fif', preload=True)
@@ -143,96 +135,24 @@ for pid in tqdm.tqdm(lstPIds):
             
             # independent component analysis (ICA)
             ica = mne.preprocessing.ICA(method="fastica",  random_state=97)
-            
-            #TODO decide later. if yes, dont forget to redo it after ica apply
-            local_autoreject = False
-            if local_autoreject:
-                ar = autoreject.AutoReject(n_jobs=-1,  verbose=True, random_state=11)
-                epochs_clean, reject_log = ar.fit_transform(epochs, return_log=True) 
-                reject_log.plot('horizontal')
-                evoked_bad = epochs[reject_log.bad_epochs].average()
-                plt.figure()
-                plt.plot(evoked_bad.times, evoked_bad.data.T * 1e6, 'r', zorder=-1)
-                epochs_clean.average().plot(axes=plt.gca())
-                #epochs = epochs_clean
-                ica.fit(epochs[~reject_log.bad_epochs], tstep = epochs_tstep)
 
             ica.fit(epochs)
+            
+            ic_labels = label_components(epochs, ica, method='iclabel')
+            labels = ic_labels["labels"]
+            exclude_idx = [idx for idx, labels in enumerate(labels) if label not in ['brain', 'brain']]
+            print('icas to exclude are: ' + exclude_idx)
+            ica.exclude = exclude_idx
+            #ica.labels_['exclude'] = exclude_idx
+            
             ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
             
         else:
             ica = mne.preprocessing.read_ica('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif')
-         
-        # Optionally autoreject muscle and eog artifacts
-        if (pick_ic_auto):
-            #start fresh, else find_bads_muscle fails
-            ica.exclude = []
-            
-            ica_z_thresh = 1.96
-            eog_indices, eog_scores = ica.find_bads_eog(epochs, 
-                                                        ch_name=['F3', 'F4'], 
-                                                        threshold=ica_z_thresh)
-            print(f'Automatically found eye artifact ICA components: {eog_indices}')
-
-            # ica.plot_scores(eog_scores)  
-            muscle_idx_auto = []
-            
-            #TODO make true again, just not with  this data...
-            if(True):
-                muscle_idx_auto, scores = ica.find_bads_muscle(epochs)
-                #ica.plot_scores(scores, exclude=muscle_idx_auto)
-                print(f'Automatically found muscle artifact ICA components: {muscle_idx_auto}')
-            
-            for item in muscle_idx_auto + eog_indices :
-                if item not in ica.exclude:
-                    ica.exclude.append(item)
-                    
-            #print("excludes are" , ica.exclude)
-            #ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', title = str(pid) + '-' + str(x) )
-
-        # Pick templates
-        if(pick_ic_as_template):
-            done = False
-            while not done:
-                
-                ics_old = ica.exclude
-                ica.plot_properties(epochs, dB= True, log_scale= True, psd_args={'fmax':70})
-                ica.plot_sources(epochs, block = True, title = str(pid) + '-' + str(x), stop = 360. )
-                ica.plot_overlay(epochs.average(), exclude=ica.exclude, picks='eeg', stop = 360.)
-
-                while True:
-                    accept = get_user_input(valid_response={'no', 'yes'},
-                                            prompt="Accept? - yes | no",
-                                            err_prompt = "yes | no")
-                    try:
-                        if accept == 'yes':
-                            ica.save('./ica/'+ str(pid) + '-' + str (x) + '_template-ica.fif', overwrite = True)
-                            ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)
-                            done = True
-                            quit = get_user_input(valid_response={'no', 'yes'},
-                                        prompt="Quit? - yes | no",
-                                        err_prompt = "yes | no")                   
-                            if quit == 'yes':
-                                pick_ic_as_template = False
-                                break
-                            break
-                        else:
-                            ica.exclude = ics_old # doesn't to anything
-                            quit = get_user_input(valid_response={'no', 'yes'},
-                                            prompt="Quit? - yes | no",
-                                            err_prompt = "yes | no")                       
-                            if quit == 'yes':
-                                pick_ic_as_template = False
-                                done = True
-                                break     
-                            else:
-                                break              
-                    except Exception as e:
-                        print(e)
         
         # TODO remove save ica from template picker  
         # if there are excludes in ica, template doesnt work :DDDD      
-        ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)       
+        #ica.save('./ica/fifs/' + str(pid) + '-' + str(x) + '-ica.fif', overwrite = True)       
            
         #TODO put this somewhere else
         clean_ica_excludes = False
@@ -254,25 +174,9 @@ ica_excludes = []
 
 #count = 0
 dir_path = r'./ica/'
-for path in os.scandir(dir_path):
-    if path.is_file():
-        #count += 1
-        #print(path.name)
-        ica_template = mne.preprocessing.read_ica(dir_path  + path.name)
-        if(ica_template.exclude != []):           
-            ica_templates.append(ica_template)
-        else:
-            os.remove(dir_path + path.name)
  
 clean_epochs = np.empty((len(lstPIds), NUM_BLOCKS), dtype=object) # remove
 
-for n, ic_templ in enumerate(ica_templates):
-    icas.insert(0,ic_templ) #set template
-    for x, excl in enumerate(ica_templates[n].exclude):
-        #threshold=0.9
-        mne.preprocessing.corrmap(icas, [0,excl], label='exclude', threshold=0.9, plot=False)
-    icas.pop(0) # remove template.
-    
 p = 0
 b = 0
 for i, ica in enumerate(icas):
@@ -281,26 +185,11 @@ for i, ica in enumerate(icas):
     if p == 4: p = 5
     if p == 8:  p = 9
     if p == 10: p = 11
-    b = 1 if  b == 8 else b
-    
-    #print(p , " block ", b)
-
-    if 'exclude' in ica.labels_:
-        #n.plot_overlay(arr_epochs[i].average(), n.labels_['exclude'], picks='eeg', title=("p "+ str(p) +" block " +str(b)) )
-        
-        #add autodetected artifacts to exclude
-        if(pick_ic_auto):
-            for item in  ica.labels_['exclude'] :
-                if item not in ica.exclude:
-                    ica.exclude.append(item)
-        else:
-            ica.exclude = ica.labels_['exclude']
-    # else:
-    #     print("No templates selected \n")
+    b = 1 if  b == 8 else b   
     
     #print("Final ICAs to exclude are" ,n.exclude)
     #n.plot_overlay(arr_epochs[i].average(), n.exclude, picks='eeg',  title=("p "+ str(p) +" block " +str(b)))
-    ica.apply(arr_epochs[i]) # TODO at least i hope so, double check indices. 
+    ica.apply(arr_epochs[i], exclude = ica.exclude) # TODO at least i hope so, double check indices. 
 
 clean_epochs = np.reshape(arr_epochs, (len(lstPIds),NUM_BLOCKS))
 

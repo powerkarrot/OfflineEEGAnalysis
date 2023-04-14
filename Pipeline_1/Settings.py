@@ -7,7 +7,7 @@ draw_plots = False
 pick_ic_auto = False
 pick_ic_as_template = False
 
-TEST = False
+TEST = True
 
 #eeg stuff config
 bands = Bands({'theta': [4, 8], 'alpha': [8, 12]})   
